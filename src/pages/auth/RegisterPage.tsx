@@ -20,6 +20,7 @@ export default function RegisterPage() {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [authError, setAuthError] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,7 +48,12 @@ export default function RegisterPage() {
       await register(formData.email, formData.password, formData.name);
       navigate('/dashboard');
     } catch (error: any) {
-      setAuthError(error?.message || 'Registration failed. Please try again.');
+      const msg: string = error?.message || '';
+      if (msg.toLowerCase().includes('check your email') || msg.toLowerCase().includes('confirm')) {
+        setEmailSent(true);
+      } else {
+        setAuthError(msg || 'Registration failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -87,6 +93,23 @@ export default function RegisterPage() {
           <CardDescription>Sign up to start your reading journey with Ella's Library</CardDescription>
         </CardHeader>
         <CardContent>
+          {emailSent ? (
+            <div className="space-y-4 py-4 text-center">
+              <div className="flex flex-col items-center space-y-3">
+                <div className="p-4 rounded-full bg-green-500/10">
+                  <Check className="w-8 h-8 text-green-500" />
+                </div>
+                <h3 className="text-lg font-semibold">Account Created!</h3>
+                <p className="text-sm text-muted-foreground">
+                  A confirmation link has been sent to <strong>{formData.email}</strong>.
+                  Please check your inbox and click the link to activate your account.
+                </p>
+                <Link to="/login" className="text-primary hover:underline text-sm font-medium">
+                  Back to Sign In
+                </Link>
+              </div>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {authError && (
               <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-400">
@@ -262,6 +285,7 @@ export default function RegisterPage() {
               </Link>
             </p>
           </form>
+          )}
         </CardContent>
       </Card>
     </motion.div>

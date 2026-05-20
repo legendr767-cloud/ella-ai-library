@@ -39,7 +39,14 @@ export default function LoginPage() {
       await login(formData.email, formData.password);
       navigate('/dashboard');
     } catch (error: any) {
-      setAuthError(error?.message || 'Invalid email or password. Please try again.');
+      const msg: string = error?.message || '';
+      if (msg.toLowerCase().includes('email not confirmed') || msg.toLowerCase().includes('not confirmed')) {
+        setAuthError('Your email is not confirmed yet. Please check your inbox and click the confirmation link first.');
+      } else if (msg.toLowerCase().includes('invalid login') || msg.toLowerCase().includes('invalid credentials')) {
+        setAuthError('Incorrect email or password. Please try again.');
+      } else {
+        setAuthError(msg || 'Sign in failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
