@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Search, Filter, Star, BookOpen, Heart } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, Filter, Star, BookOpen, Heart, CheckCircle, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -105,6 +105,24 @@ export default function BooksPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [showFilters, setShowFilters] = useState(false);
+  const [favorites, setFavorites] = useState<number[]>([]);
+  const [borrowedIds, setBorrowedIds] = useState<number[]>([]);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'info' } | null>(null);
+
+  const showToast = (msg: string, type: 'success' | 'info' = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const toggleFavorite = (id: number, title: string) => {
+    setFavorites(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
+    showToast(favorites.includes(id) ? `Removed from favourites` : `Added "${title}" to favourites`, 'info');
+  };
+
+  const handleBorrow = (id: number, title: string) => {
+    setBorrowedIds(prev => [...prev, id]);
+    showToast(`"${title}" borrowed! Check My Books for details.`);
+  };
 
   const filteredBooks = mockBooks.filter((book) => {
     const matchesSearch = book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -195,8 +213,8 @@ export default function BooksPage() {
                       {book.available ? 'Available' : 'Borrowed'}
                     </Badge>
                   </div>
-                  <button className="absolute top-3 left-3 p-2 rounded-full bg-white/90 hover:bg-white transition-colors">
-                    <Heart className="w-4 h-4" />
+                  <button onClick={() => toggleFavorite(book.id, book.title)} className="absolute top-3 left-3 p-2 rounded-full bg-white/90 hover:bg-white transition-colors">
+                    <Heart className={`w-4 h-4 transition-colors ${favorites.includes(book.id) ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
                   </button>
                 </div>
                 
@@ -225,9 +243,13 @@ export default function BooksPage() {
                         Details
                       </Button>
                     </Link>
-                    {book.available ? (
-                      <Button size="sm" className="flex-1">
+                    {book.available && !borrowedIds.includes(book.id) ? (
+                      <Button size="sm" className="flex-1" onClick={() => handleBorrow(book.id, book.title)}>
                         Borrow
+                      </Button>
+                    ) : borrowedIds.includes(book.id) ? (
+                      <Button size="sm" variant="secondary" className="flex-1" disabled>
+                        <CheckCircle className="w-3 h-3 mr-1" />Borrowed
                       </Button>
                     ) : (
                       <Button size="sm" variant="secondary" className="flex-1" disabled>
@@ -240,6 +262,18 @@ export default function BooksPage() {
             </motion.div>
           ))}
         </div>
+
+      {/* Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
+            className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-xl shadow-xl text-white ${ toast.type === 'success' ? 'bg-green-600' : 'bg-primary' }`}>
+            <CheckCircle className="w-5 h-5" />
+            <span className="text-sm font-medium">{toast.msg}</span>
+            <button onClick={() => setToast(null)}><X className="w-4 h-4 opacity-70 hover:opacity-100" /></button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
         {/* No Results */}
         {filteredBooks.length === 0 && (

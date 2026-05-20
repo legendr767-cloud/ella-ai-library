@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AnimatePresence, motion as m } from 'framer-motion';
+import { X } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { motion } from 'framer-motion';
 import {
@@ -100,6 +102,9 @@ const recommendations = [
 
 export default function DashboardPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month' | 'year'>('week');
+  const [showGoalsModal, setShowGoalsModal] = useState(false);
+  const [goalInput, setGoalInput] = useState(stats.readingGoal.toString());
+  const [savedGoal, setSavedGoal] = useState(stats.readingGoal);
   const { profile, user } = useAuthStore();
 
   const firstName = profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'Reader';
@@ -108,6 +113,8 @@ export default function DashboardPage() {
     ...stats,
     booksRead: profile?.total_books_read ?? stats.booksRead,
     readingStreak: profile?.reading_streak ?? stats.readingStreak,
+    readingGoal: savedGoal,
+    currentProgress: profile?.total_books_read ?? stats.currentProgress,
   };
 
   const maxPages = Math.max(...readingActivity.map(d => d.pages));
@@ -120,7 +127,7 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold mb-2">Welcome back, {firstName}! 👋</h1>
           <p className="text-muted-foreground">Here's your reading progress</p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => { setGoalInput(savedGoal.toString()); setShowGoalsModal(true); }}>
           <Target className="w-4 h-4" />
           Set Goals
         </Button>
@@ -452,6 +459,45 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
+      {/* Set Goals Modal */}
+      <AnimatePresence>
+        {showGoalsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/50" onClick={() => setShowGoalsModal(false)} />
+            <m.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              className="relative bg-background rounded-xl shadow-2xl w-full max-w-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold flex items-center gap-2"><Target className="w-5 h-5 text-primary" />Reading Goal</h2>
+                <button onClick={() => setShowGoalsModal(false)} className="w-8 h-8 rounded-full hover:bg-muted flex items-center justify-center"><X className="w-4 h-4" /></button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium block mb-2">Books to read in 2026</label>
+                  <input
+                    type="number" min="1" max="365"
+                    value={goalInput}
+                    onChange={(e) => setGoalInput(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border bg-background text-2xl font-bold text-center focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {[12, 24, 36, 52].map(n => (
+                    <button key={n} onClick={() => setGoalInput(n.toString())}
+                      className={`px-3 py-1 rounded-full text-sm border transition-colors ${ goalInput === n.toString() ? 'bg-primary text-white border-primary' : 'hover:bg-muted' }`}>
+                      {n} books
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <Button variant="outline" className="flex-1" onClick={() => setShowGoalsModal(false)}>Cancel</Button>
+                <Button className="flex-1" onClick={() => { setSavedGoal(parseInt(goalInput) || 50); setShowGoalsModal(false); }}>Save Goal</Button>
+              </div>
+            </m.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

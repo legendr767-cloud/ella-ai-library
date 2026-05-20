@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookOpen,
   Clock,
@@ -9,8 +9,7 @@ import {
   CheckCircle,
   RefreshCw,
   Download,
-  Eye,
-  Star,
+  X,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -69,8 +68,25 @@ const mockBorrows = [
 
 export default function MyBooksPage() {
   const [filter, setFilter] = useState<'all' | 'active' | 'overdue'>('all');
+  const [borrows, setBorrows] = useState(mockBorrows);
+  const [toast, setToast] = useState<string | null>(null);
 
-  const filteredBorrows = mockBorrows.filter(borrow => {
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+
+  const handleReturn = (id: number, title: string) => {
+    setBorrows(prev => prev.filter(b => b.id !== id));
+    showToast(`"${title}" returned successfully.`);
+  };
+
+  const handleRenew = (id: number, title: string) => {
+    setBorrows(prev => prev.map(b => b.id === id
+      ? { ...b, renewals: b.renewals + 1, daysLeft: b.daysLeft + 14, dueDate: new Date(Date.now() + (b.daysLeft + 14) * 86400000).toISOString().split('T')[0] }
+      : b
+    ));
+    showToast(`"${title}" renewed for 14 more days.`);
+  };
+
+  const filteredBorrows = borrows.filter(borrow => {
     if (filter === 'all') return true;
     return borrow.status === filter;
   });
@@ -100,7 +116,7 @@ export default function MyBooksPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Active Borrows</p>
-                <p className="text-3xl font-bold">{mockBorrows.filter(b => b.status === 'active').length}</p>
+                <p className="text-3xl font-bold">{borrows.filter(b => b.status === 'active').length}</p>
               </div>
               <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
                 <BookOpen className="w-6 h-6 text-primary" />
@@ -114,7 +130,7 @@ export default function MyBooksPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Overdue</p>
-                <p className="text-3xl font-bold">{mockBorrows.filter(b => b.status === 'overdue').length}</p>
+                <p className="text-3xl font-bold">{borrows.filter(b => b.status === 'overdue').length}</p>
               </div>
               <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
                 <AlertCircle className="w-6 h-6 text-red-500" />
@@ -129,7 +145,7 @@ export default function MyBooksPage() {
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Avg. Progress</p>
                 <p className="text-3xl font-bold">
-                  {Math.round(mockBorrows.reduce((sum, b) => sum + b.progress, 0) / mockBorrows.length)}%
+                  {borrows.length > 0 ? Math.round(borrows.reduce((sum, b) => sum + b.progress, 0) / borrows.length) : 0}%
                 </p>
               </div>
               <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
@@ -150,7 +166,7 @@ export default function MyBooksPage() {
             onClick={() => setFilter(f)}
             className="capitalize"
           >
-            {f} ({mockBorrows.filter(b => f === 'all' || b.status === f).length})
+            {f} ({borrows.filter(b => f === 'all' || b.status === f).length})
           </Button>
         ))}
       </div>
@@ -239,7 +255,7 @@ export default function MyBooksPage() {
                     )}
 
                     {/* Actions */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Link to={`/reader/${borrow.book.id}`}>
                         <Button size="sm" className="gap-2">
                           <BookOpen className="w-4 h-4" />
@@ -251,15 +267,18 @@ export default function MyBooksPage() {
                         variant="outline"
                         className="gap-2"
                         disabled={borrow.renewals >= borrow.maxRenewals}
+                        onClick={() => handleRenew(borrow.id, borrow.book.title)}
                       >
                         <RefreshCw className="w-4 h-4" />
                         Renew ({borrow.renewals}/{borrow.maxRenewals})
                       </Button>
-                      <Button size="sm" variant="outline" className="gap-2">
+                      <Button size="sm" variant="outline" className="gap-2"
+                        onClick={() => showToast('Download started — check your downloads folder.')}>
                         <Download className="w-4 h-4" />
                         Download
                       </Button>
-                      <Button size="sm" variant="ghost" className="gap-2">
+                      <Button size="sm" variant="ghost" className="gap-2 text-red-500 hover:text-red-600"
+                        onClick={() => handleReturn(borrow.id, borrow.book.title)}>
                         Return Book
                       </Button>
                     </div>
@@ -270,6 +289,18 @@ export default function MyBooksPage() {
           </motion.div>
         ))}
       </div>
+
+      {/* Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-xl shadow-xl bg-green-600 text-white">
+            <CheckCircle className="w-5 h-5" />
+            <span className="text-sm font-medium">{toast}</span>
+            <button onClick={() => setToast(null)}><X className="w-4 h-4 opacity-70" /></button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {filteredBorrows.length === 0 && (
         <Card>

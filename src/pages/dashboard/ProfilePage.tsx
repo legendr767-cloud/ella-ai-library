@@ -173,13 +173,12 @@ export default function ProfilePage() {
           <div className="space-y-2">
             <label className="text-sm font-medium">Favorite Genres</label>
             <div className="flex flex-wrap gap-2">
-              {profile.favoriteGenres.map((genre) => (
-                <Badge key={genre} variant="default">
-                  {genre}
-                  <button className="ml-2 hover:text-red-500">×</button>
-                </Badge>
+              {(authProfile?.favorite_categories || []).map((genre: string) => (
+                <Badge key={genre} variant="default">{genre}</Badge>
               ))}
-              <Button variant="outline" size="sm">+ Add Genre</Button>
+              {(authProfile?.favorite_categories || []).length === 0 && (
+                <p className="text-sm text-muted-foreground">No favourite genres set yet.</p>
+              )}
             </div>
           </div>
           <div className="grid md:grid-cols-2 gap-4">

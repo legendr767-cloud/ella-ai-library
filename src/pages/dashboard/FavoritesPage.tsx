@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Heart,
   BookmarkPlus,
@@ -8,11 +8,10 @@ import {
   Plus,
   Star,
   Trash2,
-  Edit,
   Share2,
-  Download,
   Eye,
-  Filter,
+  CheckCircle,
+  X,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -93,9 +92,32 @@ const mockBooks = [
 export default function FavoritesPage() {
   const [activeList, setActiveList] = useState<string>('favorites');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [books, setBooks] = useState(mockBooks);
+  const [customLists, setCustomLists] = useState<{id: string; name: string; icon: typeof Heart; count: number; color: string}[]>([]);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newListName, setNewListName] = useState('');
+  const [toast, setToast] = useState<string | null>(null);
 
-  const filteredBooks = mockBooks.filter(book => book.lists.includes(activeList));
-  const activeListData = lists.find(l => l.id === activeList);
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+
+  const handleRemove = (bookId: number, listId: string) => {
+    setBooks(prev => prev.map(b => b.id === bookId ? { ...b, lists: b.lists.filter(l => l !== listId) } : b));
+    showToast('Book removed from list.');
+  };
+
+  const handleCreateList = () => {
+    if (!newListName.trim()) return;
+    const id = newListName.toLowerCase().replace(/\s+/g, '-');
+    setCustomLists(prev => [...prev, { id, name: newListName, icon: List, count: 0, color: 'text-primary' }]);
+    setNewListName('');
+    setShowCreateModal(false);
+    showToast(`List "${newListName}" created!`);
+  };
+
+  const allLists = [...lists, ...customLists];
+
+  const filteredBooks = books.filter(book => book.lists.includes(activeList));
+  const activeListData = allLists.find(l => l.id === activeList);
 
   return (
     <div className="p-6 space-y-6">
@@ -105,7 +127,7 @@ export default function FavoritesPage() {
           <h1 className="text-3xl font-bold mb-2">My Lists</h1>
           <p className="text-muted-foreground">Organize and manage your reading collection</p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setShowCreateModal(true)}>
           <Plus className="w-4 h-4" />
           Create List
         </Button>
@@ -113,7 +135,7 @@ export default function FavoritesPage() {
 
       {/* List Tabs */}
       <div className="flex gap-4 overflow-x-auto pb-2">
-        {lists.map((list) => {
+        {allLists.map((list) => {
           const Icon = list.icon;
           return (
             <button
@@ -225,7 +247,7 @@ export default function FavoritesPage() {
                           View
                         </Button>
                       </Link>
-                      <Button size="sm" variant="secondary" className="gap-1">
+                      <Button size="sm" variant="secondary" className="gap-1" onClick={() => handleRemove(book.id, activeList)}>
                         <Trash2 className="w-3 h-3" />
                       </Button>
                     </div>
@@ -297,15 +319,12 @@ export default function FavoritesPage() {
                             View Details
                           </Button>
                         </Link>
-                        <Button size="sm" variant="outline" className="gap-2">
-                          <Download className="w-4 h-4" />
-                          Download
+                        <Button size="sm" variant="outline" className="gap-2"
+                          onClick={() => showToast('Download starting...')}>
+                          <Share2 className="w-4 h-4" />
+                          Share
                         </Button>
-                        <Button size="sm" variant="outline" className="gap-2">
-                          <Edit className="w-4 h-4" />
-                          Edit
-                        </Button>
-                        <Button size="sm" variant="ghost" className="gap-2 text-red-500 hover:text-red-600">
+                        <Button size="sm" variant="ghost" className="gap-2 text-red-500 hover:text-red-600" onClick={() => handleRemove(book.id, activeList)}>
                           <Trash2 className="w-4 h-4" />
                           Remove
                         </Button>
@@ -319,6 +338,47 @@ export default function FavoritesPage() {
           ))}
         </div>
       )}
+
+      {/* Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-xl shadow-xl bg-primary text-white">
+            <CheckCircle className="w-5 h-5" />
+            <span className="text-sm font-medium">{toast}</span>
+            <button onClick={() => setToast(null)}><X className="w-4 h-4 opacity-70" /></button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Create List Modal */}
+      <AnimatePresence>
+        {showCreateModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/50" onClick={() => setShowCreateModal(false)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              className="relative bg-background rounded-xl shadow-2xl w-full max-w-sm p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold">Create New List</h2>
+                <button onClick={() => setShowCreateModal(false)} className="w-8 h-8 rounded-full hover:bg-muted flex items-center justify-center"><X className="w-4 h-4" /></button>
+              </div>
+              <input
+                type="text" placeholder="List name..."
+                value={newListName}
+                onChange={e => setNewListName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleCreateList()}
+                className="w-full px-3 py-2 rounded-lg border bg-background mb-4 focus:outline-none focus:ring-2 focus:ring-primary"
+                autoFocus
+              />
+              <div className="flex gap-3">
+                <button onClick={() => setShowCreateModal(false)} className="flex-1 px-4 py-2 rounded-lg border hover:bg-muted transition-colors text-sm">Cancel</button>
+                <button onClick={handleCreateList} className="flex-1 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors text-sm font-medium">Create</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* List Stats */}
       {filteredBooks.length > 0 && (
