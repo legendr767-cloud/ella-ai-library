@@ -1,19 +1,25 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { User, Mail, Lock, Bell, Globe, Palette, Save, Camera } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { User, Lock, Bell, Globe, Palette, Save, Camera } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
+import { useAuthStore } from '@/store/authStore';
 
 export default function ProfilePage() {
-  const [profile, setProfile] = useState({
-    name: 'John Doe',
-    email: 'john@example.com',
-    bio: 'Avid reader and book enthusiast',
-    location: 'New York, USA',
-    favoriteGenres: ['Fiction', 'Science Fiction', 'History'],
+  const { profile: authProfile, user, updateProfile } = useAuthStore();
+
+  const [formData, setFormData] = useState({
+    full_name: '',
+    phone: '',
+    address: '',
+    student_id: '',
+    department: '',
   });
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const [preferences, setPreferences] = useState({
     emailNotifications: true,
@@ -21,6 +27,41 @@ export default function ProfilePage() {
     recommendations: true,
     newsletter: false,
   });
+
+  useEffect(() => {
+    if (authProfile) {
+      setFormData({
+        full_name: authProfile.full_name || '',
+        phone: authProfile.phone || '',
+        address: authProfile.address || '',
+        student_id: authProfile.student_id || '',
+        department: authProfile.department || '',
+      });
+    }
+  }, [authProfile]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveSuccess(false);
+    setSaveError('');
+    try {
+      await updateProfile(formData);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: any) {
+      setSaveError(err?.message || 'Failed to save changes.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const memberSince = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    : 'Recently';
+
+  const initials = formData.full_name
+    ? formData.full_name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+    : '?';
 
   return (
     <div className="p-6 space-y-6 max-w-4xl">
@@ -40,18 +81,18 @@ export default function ProfilePage() {
           <div className="flex items-center gap-6">
             <div className="relative">
               <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center text-white text-3xl font-bold">
-                {profile.name.charAt(0)}
+                {initials}
               </div>
               <button className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center hover:bg-primary/90 transition-colors">
                 <Camera className="w-4 h-4" />
               </button>
             </div>
             <div>
-              <h3 className="font-semibold text-lg">{profile.name}</h3>
-              <p className="text-sm text-muted-foreground">{profile.email}</p>
+              <h3 className="font-semibold text-lg">{formData.full_name || 'No name set'}</h3>
+              <p className="text-sm text-muted-foreground">{user?.email}</p>
               <div className="flex gap-2 mt-2">
-                <Badge>Member since 2024</Badge>
-                <Badge variant="outline">24 Books Read</Badge>
+                <Badge>Member since {memberSince}</Badge>
+                <Badge variant="outline">{authProfile?.total_books_read ?? 0} Books Read</Badge>
               </div>
             </div>
           </div>
@@ -71,32 +112,50 @@ export default function ProfilePage() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Full Name</label>
               <Input
-                value={profile.name}
-                onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                value={formData.full_name}
+                onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
               />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Email</label>
               <Input
                 type="email"
-                value={profile.email}
-                onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                value={user?.email || ''}
+                disabled
+                className="opacity-60 cursor-not-allowed"
               />
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Bio</label>
-            <textarea
-              className="w-full min-h-[100px] px-3 py-2 rounded-md border bg-background"
-              value={profile.bio}
-              onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
+            <label className="text-sm font-medium">Student ID</label>
+            <Input
+              placeholder="e.g. STU-2024-001"
+              value={formData.student_id}
+              onChange={(e) => setFormData({ ...formData, student_id: e.target.value })}
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Location</label>
+            <label className="text-sm font-medium">Department</label>
             <Input
-              value={profile.location}
-              onChange={(e) => setProfile({ ...profile, location: e.target.value })}
+              placeholder="e.g. Computer Science"
+              value={formData.department}
+              onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Phone</label>
+            <Input
+              placeholder="e.g. +1 234 567 8900"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Address</label>
+            <Input
+              placeholder="Your address"
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
             />
           </div>
         </CardContent>
@@ -207,11 +266,34 @@ export default function ProfilePage() {
       </Card>
 
       {/* Save Button */}
+      {saveError && (
+        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+          {saveError}
+        </div>
+      )}
+      {saveSuccess && (
+        <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-sm text-green-400">
+          Profile saved successfully!
+        </div>
+      )}
       <div className="flex justify-end gap-3">
-        <Button variant="outline">Cancel</Button>
-        <Button className="gap-2">
-          <Save className="w-4 h-4" />
-          Save Changes
+        <Button variant="outline" onClick={() => {
+          if (authProfile) {
+            setFormData({
+              full_name: authProfile.full_name || '',
+              phone: authProfile.phone || '',
+              address: authProfile.address || '',
+              student_id: authProfile.student_id || '',
+              department: authProfile.department || '',
+            });
+          }
+        }}>Cancel</Button>
+        <Button className="gap-2" onClick={handleSave} disabled={isSaving}>
+          {isSaving ? (
+            <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving...</>
+          ) : (
+            <><Save className="w-4 h-4" />Save Changes</>
+          )}
         </Button>
       </div>
     </div>

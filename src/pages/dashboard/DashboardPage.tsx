@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuthStore } from '@/store/authStore';
 import { motion } from 'framer-motion';
 import {
   BookOpen,
@@ -99,6 +100,15 @@ const recommendations = [
 
 export default function DashboardPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month' | 'year'>('week');
+  const { profile, user } = useAuthStore();
+
+  const firstName = profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'Reader';
+
+  const liveStats = {
+    ...stats,
+    booksRead: profile?.total_books_read ?? stats.booksRead,
+    readingStreak: profile?.reading_streak ?? stats.readingStreak,
+  };
 
   const maxPages = Math.max(...readingActivity.map(d => d.pages));
 
@@ -107,7 +117,7 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Welcome back! 👋</h1>
+          <h1 className="text-3xl font-bold mb-2">Welcome back, {firstName}! 👋</h1>
           <p className="text-muted-foreground">Here's your reading progress</p>
         </div>
         <Button className="gap-2">
@@ -124,7 +134,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Currently Reading</p>
-                  <p className="text-3xl font-bold">{stats.activeBorrows}</p>
+                  <p className="text-3xl font-bold">{liveStats.activeBorrows}</p>
                   <p className="text-xs text-muted-foreground mt-1">books</p>
                 </div>
                 <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -141,7 +151,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Books Completed</p>
-                  <p className="text-3xl font-bold">{stats.booksRead}</p>
+                  <p className="text-3xl font-bold">{liveStats.booksRead}</p>
                   <p className="text-xs text-green-500 mt-1">↑ 12% this month</p>
                 </div>
                 <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
@@ -158,7 +168,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Reading Streak</p>
-                  <p className="text-3xl font-bold">{stats.readingStreak}</p>
+                  <p className="text-3xl font-bold">{liveStats.readingStreak}</p>
                   <p className="text-xs text-muted-foreground mt-1">days in a row</p>
                 </div>
                 <div className="w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center">
@@ -175,7 +185,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Pages Read</p>
-                  <p className="text-3xl font-bold">{stats.totalPages.toLocaleString()}</p>
+                  <p className="text-3xl font-bold">{liveStats.totalPages.toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground mt-1">total pages</p>
                 </div>
                 <div className="w-12 h-12 rounded-full bg-purple-500/10 flex items-center justify-center">
@@ -196,25 +206,25 @@ export default function DashboardPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>2026 Reading Goal</CardTitle>
-                <Badge variant="outline">{stats.currentProgress}/{stats.readingGoal} books</Badge>
+                <Badge variant="outline">{liveStats.currentProgress}/{liveStats.readingGoal} books</Badge>
               </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Progress</span>
-                  <span className="font-semibold">{Math.round((stats.currentProgress / stats.readingGoal) * 100)}%</span>
+                  <span className="font-semibold">{Math.round((liveStats.currentProgress / liveStats.readingGoal) * 100)}%</span>
                 </div>
                 <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}
-                    animate={{ width: `${(stats.currentProgress / stats.readingGoal) * 100}%` }}
+                    animate={{ width: `${(liveStats.currentProgress / liveStats.readingGoal) * 100}%` }}
                     transition={{ duration: 1, delay: 0.5 }}
                     className="h-full bg-gradient-to-r from-primary to-purple-500 rounded-full"
                   />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  You're {stats.readingGoal - stats.currentProgress} books away from your goal! Keep it up! 🎯
+                  You're {liveStats.readingGoal - liveStats.currentProgress} books away from your goal! Keep it up! 🎯
                 </p>
               </div>
             </CardContent>
@@ -421,13 +431,13 @@ export default function DashboardPage() {
             <CardContent className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Reading Time</span>
-                <span className="font-semibold">{stats.hoursRead}h</span>
+                <span className="font-semibold">{liveStats.hoursRead}h</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Avg. Rating Given</span>
                 <div className="flex items-center gap-1">
                   <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  <span className="font-semibold">{stats.averageRating}</span>
+                  <span className="font-semibold">{liveStats.averageRating}</span>
                 </div>
               </div>
               <div className="flex items-center justify-between">
