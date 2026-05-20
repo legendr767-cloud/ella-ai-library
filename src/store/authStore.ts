@@ -8,6 +8,7 @@ interface AuthState {
   profile: Profile | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isInitializing: boolean;
   setUser: (user: User | null) => void;
   setProfile: (profile: Profile | null) => void;
   setLoading: (loading: boolean) => void;
@@ -24,7 +25,8 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       profile: null,
       isAuthenticated: false,
-      isLoading: true,
+      isLoading: false,
+      isInitializing: true,
 
       setUser: (user) => set({ user, isAuthenticated: !!user }),
       setProfile: (profile) => set({ profile }),
@@ -155,11 +157,11 @@ export const useAuthStore = create<AuthState>()(
 
       checkAuth: async () => {
         try {
-          set({ isLoading: true });
+          set({ isInitializing: true });
           // Skip auth check if Supabase is not configured (demo mode)
           if (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('your_supabase')) {
             console.log('Running in demo mode without backend');
-            set({ isLoading: false });
+            set({ isInitializing: false });
             return;
           }
           const { data: { session }, error } = await supabase.auth.getSession();
@@ -174,14 +176,14 @@ export const useAuthStore = create<AuthState>()(
               user: session.user,
               profile: profile || null,
               isAuthenticated: true,
-              isLoading: false,
+              isInitializing: false,
             });
           } else {
-            set({ isLoading: false });
             set({
               user: null,
               profile: null,
               isAuthenticated: false,
+              isInitializing: false,
             });
           }
         } catch (error) {
@@ -190,9 +192,8 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             profile: null,
             isAuthenticated: false,
+            isInitializing: false,
           });
-        } finally {
-          set({ isLoading: false });
         }
       },
     }),

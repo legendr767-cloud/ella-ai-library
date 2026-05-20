@@ -40,13 +40,13 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import LoadingScreen from '@/components/common/LoadingScreen';
 
 function App() {
-  const { checkAuth, isLoading } = useAuthStore();
+  const { checkAuth, isInitializing } = useAuthStore();
 
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
 
-  if (isLoading) {
+  if (isInitializing) {
     return <LoadingScreen />;
   }
 
