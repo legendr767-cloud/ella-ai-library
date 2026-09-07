@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { User, LogOut, ChevronDown } from 'lucide-react';
+import { User, LogOut, ChevronDown, LayoutDashboard } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { ROUTES } from '@/config/constants';
 import { cn } from '@/lib/utils';
@@ -104,6 +104,19 @@ export default function UserMenu({ variant = 'light' }: UserMenuProps) {
             <User className="w-4 h-4" />
             Profile
           </Link>
+          {(role === 'admin' || role === 'librarian') && (
+            <Link
+              to={ROUTES.ADMIN}
+              onClick={() => setOpen(false)}
+              className={cn(
+                'flex items-center gap-2 px-3 py-2 text-sm transition-colors',
+                isDark ? 'text-slate-600 hover:bg-slate-50' : 'text-foreground hover:bg-accent'
+              )}
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              Admin Panel
+            </Link>
+          )}
           <button
             onClick={handleLogout}
             className={cn(

@@ -37,7 +37,8 @@ export default function LoginPage() {
 
     try {
       await login(formData.email, formData.password);
-      navigate('/dashboard');
+      const role = useAuthStore.getState().user?.role;
+      navigate(role === 'admin' || role === 'librarian' ? '/admin' : '/dashboard');
     } catch (error: any) {
       const msg: string = error?.message || '';
       if (msg.toLowerCase().includes('email not confirmed') || msg.toLowerCase().includes('not confirmed')) {
