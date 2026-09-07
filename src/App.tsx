@@ -34,6 +34,7 @@ import AdminUsers from '@/pages/admin/AdminUsers';
 import AdminBorrows from '@/pages/admin/AdminBorrows';
 import AdminAnalytics from '@/pages/admin/AdminAnalytics';
 import AdminCategories from '@/pages/admin/AdminCategories';
+import AdminSettings from '@/pages/admin/AdminSettings';
 
 // Components
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
@@ -106,6 +107,7 @@ function App() {
           <Route path={ROUTES.ADMIN_BORROWS} element={<AdminBorrows />} />
           <Route path={ROUTES.ADMIN_ANALYTICS} element={<AdminAnalytics />} />
           <Route path={ROUTES.ADMIN_CATEGORIES} element={<AdminCategories />} />
+          <Route path={ROUTES.ADMIN_SETTINGS} element={<AdminSettings />} />
         </Route>
 
         {/* Catch all */}
