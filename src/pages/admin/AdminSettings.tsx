@@ -17,7 +17,7 @@ export default function AdminSettings() {
         <CardContent className="space-y-4 max-w-lg">
           <div>
             <label className="text-sm font-medium text-slate-700 mb-1 block">Library Name</label>
-            <Input defaultValue="CloudLib" />
+            <Input defaultValue="Ella's Library" />
           </div>
           <div>
             <label className="text-sm font-medium text-slate-700 mb-1 block">Support Email</label>

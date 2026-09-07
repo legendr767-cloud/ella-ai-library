@@ -20,7 +20,6 @@ import BooksPage from '@/pages/BooksPage';
 import BookDetailsPage from '@/pages/BookDetailsPage';
 
 // Protected Pages
-import DashboardPage from '@/pages/dashboard/DashboardPage';
 import MyBooksPage from '@/pages/dashboard/MyBooksPage';
 import FavoritesPage from '@/pages/dashboard/FavoritesPage';
 import HistoryPage from '@/pages/dashboard/HistoryPage';
@@ -76,7 +75,6 @@ function App() {
             </ProtectedRoute>
           }
         >
-          <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
           <Route path={ROUTES.MY_BOOKS} element={<MyBooksPage />} />
           <Route path={ROUTES.FAVORITES} element={<FavoritesPage />} />
           <Route path={ROUTES.HISTORY} element={<HistoryPage />} />
@@ -93,7 +91,7 @@ function App() {
           }
         />
 
-        {/* Admin Routes */}
+        {/* Admin Routes — also serves as the main dashboard now */}
         <Route
           element={
             <ProtectedRoute allowedRoles={['admin', 'librarian']}>
@@ -101,6 +99,7 @@ function App() {
             </ProtectedRoute>
           }
         >
+          <Route path={ROUTES.DASHBOARD} element={<Navigate to={ROUTES.ADMIN} replace />} />
           <Route path={ROUTES.ADMIN} element={<AdminDashboard />} />
           <Route path={ROUTES.ADMIN_BOOKS} element={<AdminBooks />} />
           <Route path={ROUTES.ADMIN_USERS} element={<AdminUsers />} />

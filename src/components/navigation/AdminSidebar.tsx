@@ -78,8 +78,8 @@ export default function AdminSidebar({ open = false, onClose }: AdminSidebarProp
           <Cloud className="w-5 h-5 text-blue-400" />
         </div>
         <div className="leading-tight">
-          <p className="text-white font-bold text-base -mb-0.5">CloudLib</p>
-          <p className="text-[10px] tracking-wide text-slate-400">CLOUD LIBRARY SYSTEM</p>
+          <p className="text-white font-bold text-base -mb-0.5">Ella's Library</p>
+          <p className="text-[10px] tracking-wide text-slate-400">SMART LIBRARY SYSTEM</p>
         </div>
       </div>
 
