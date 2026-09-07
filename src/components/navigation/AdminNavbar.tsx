@@ -1,19 +1,16 @@
 import { useState } from 'react';
-import { Menu, Search, Bell, ChevronDown } from 'lucide-react';
-import { useAuthStore } from '@/store/authStore';
+import { Menu, Search, Bell } from 'lucide-react';
+import UserMenu from '@/components/navigation/UserMenu';
 
 export default function AdminNavbar({ onMenuClick }: { onMenuClick?: () => void }) {
-  const { profile, user } = useAuthStore();
   const [query, setQuery] = useState('');
-
-  const displayName = profile?.full_name || 'Admin User';
-  const role = user?.role || 'Administrator';
 
   return (
     <header className="sticky top-0 z-40 h-16 bg-white border-b border-slate-200 flex items-center gap-4 px-4 lg:px-6">
       <button
         onClick={onMenuClick}
         className="lg:hidden p-2 -ml-2 rounded-lg hover:bg-slate-100 text-slate-600"
+        aria-label="Open menu"
       >
         <Menu className="w-5 h-5" />
       </button>
@@ -37,18 +34,7 @@ export default function AdminNavbar({ onMenuClick }: { onMenuClick?: () => void 
         </span>
       </button>
 
-      <button className="flex items-center gap-3 pl-2 pr-1 py-1 rounded-lg hover:bg-slate-100">
-        <div className="h-9 w-9 rounded-full bg-slate-200 overflow-hidden flex items-center justify-center">
-          <span className="text-sm font-semibold text-slate-600">
-            {displayName.charAt(0).toUpperCase()}
-          </span>
-        </div>
-        <div className="hidden sm:block text-left leading-tight">
-          <p className="text-sm font-semibold text-slate-800">{displayName}</p>
-          <p className="text-xs text-slate-400 capitalize">{role}</p>
-        </div>
-        <ChevronDown className="hidden sm:block w-4 h-4 text-slate-400" />
-      </button>
+      <UserMenu variant="dark" />
     </header>
   );
 }

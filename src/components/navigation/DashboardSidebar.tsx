@@ -1,12 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  BookOpen, 
-  Heart, 
-  History, 
-  User, 
+import {
+  LayoutDashboard,
+  Heart,
+  History,
+  User,
   LogOut,
-  BookMarked
+  BookMarked,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
@@ -20,12 +19,17 @@ const navItems = [
   { icon: User, label: 'Profile', href: ROUTES.PROFILE },
 ];
 
-export default function DashboardSidebar() {
+interface DashboardSidebarProps {
+  open?: boolean;
+  onClose?: () => void;
+}
+
+export default function DashboardSidebar({ open = false, onClose }: DashboardSidebarProps) {
   const location = useLocation();
   const { logout } = useAuthStore();
 
-  return (
-    <aside className="hidden lg:flex flex-col w-64 border-r bg-background min-h-[calc(100vh-4rem)]">
+  const content = (
+    <>
       <div className="flex-1 py-6">
         <nav className="space-y-1 px-3">
           {navItems.map((item) => {
@@ -36,6 +40,7 @@ export default function DashboardSidebar() {
               <Link
                 key={item.href}
                 to={item.href}
+                onClick={onClose}
                 className={cn(
                   'flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                   isActive
@@ -60,6 +65,23 @@ export default function DashboardSidebar() {
           <span>Logout</span>
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      <aside className="hidden lg:flex flex-col w-64 border-r bg-background min-h-[calc(100vh-4rem)]">
+        {content}
+      </aside>
+
+      {open && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+          <aside className="relative flex flex-col w-64 bg-background h-full overflow-y-auto">
+            {content}
+          </aside>
+        </div>
+      )}
+    </>
   );
 }

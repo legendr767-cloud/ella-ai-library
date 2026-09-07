@@ -62,11 +62,16 @@ const navSections: NavSection[] = [
   },
 ];
 
-export default function AdminSidebar() {
+interface AdminSidebarProps {
+  open?: boolean;
+  onClose?: () => void;
+}
+
+export default function AdminSidebar({ open = false, onClose }: AdminSidebarProps) {
   const location = useLocation();
 
-  return (
-    <aside className="hidden lg:flex flex-col w-64 flex-shrink-0 bg-[#0b1324] min-h-screen sticky top-0">
+  const sidebarContent = (
+    <>
       {/* Brand */}
       <div className="flex items-center gap-2 px-6 h-16 border-b border-white/10">
         <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
@@ -95,6 +100,7 @@ export default function AdminSidebar() {
                   <Link
                     key={item.label}
                     to={item.href}
+                    onClick={onClose}
                     className={cn(
                       'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                       isActive
@@ -125,6 +131,25 @@ export default function AdminSidebar() {
           </div>
         </div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex flex-col w-64 flex-shrink-0 bg-[#0b1324] min-h-screen sticky top-0">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile drawer */}
+      {open && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+          <aside className="relative flex flex-col w-64 bg-[#0b1324] h-full overflow-y-auto">
+            {sidebarContent}
+          </aside>
+        </div>
+      )}
+    </>
   );
 }
