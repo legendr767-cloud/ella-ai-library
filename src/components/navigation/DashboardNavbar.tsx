@@ -1,7 +1,8 @@
-import { Bell, Search, Moon, Sun, Menu } from 'lucide-react';
+import { Moon, Sun, Menu, Search } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useThemeStore } from '@/store/themeStore';
 import UserMenu from '@/components/navigation/UserMenu';
+import NotificationsBell from '@/components/navigation/NotificationsBell';
 
 export default function DashboardNavbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const { theme, toggleTheme } = useThemeStore();
@@ -37,12 +38,9 @@ export default function DashboardNavbar({ onMenuClick }: { onMenuClick?: () => v
             )}
           </Button>
 
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full" />
-          </Button>
+          <NotificationsBell />
 
-          <UserMenu variant="light" />
+          <UserMenu />
         </div>
       </div>
     </header>

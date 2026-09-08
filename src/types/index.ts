@@ -20,6 +20,9 @@ export interface Profile {
   id: string;
   user_id: string;
   full_name: string;
+  email?: string;
+  role?: UserRole;
+  is_suspended?: boolean;
   avatar_url?: string;
   phone?: string;
   address?: string;

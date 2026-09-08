@@ -15,6 +15,9 @@ export interface Database {
           id: string
           user_id: string
           full_name: string
+          email: string | null
+          role: string
+          is_suspended: boolean
           avatar_url: string | null
           phone: string | null
           address: string | null
@@ -31,6 +34,9 @@ export interface Database {
           id?: string
           user_id: string
           full_name: string
+          email?: string | null
+          role?: string
+          is_suspended?: boolean
           avatar_url?: string | null
           phone?: string | null
           address?: string | null
@@ -47,6 +53,9 @@ export interface Database {
           id?: string
           user_id?: string
           full_name?: string
+          email?: string | null
+          role?: string
+          is_suspended?: boolean
           avatar_url?: string | null
           phone?: string | null
           address?: string | null
@@ -366,7 +375,10 @@ export interface Database {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      admin_update_user_role: {
+        Args: { target_user_id: string; new_role: string }
+        Returns: undefined
+      }
     }
     Enums: {
       user_role: 'admin' | 'librarian' | 'student'
