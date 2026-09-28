@@ -17,28 +17,6 @@ export function formatBytes(bytes?: number | null): string {
   return `${n.toFixed(n >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-export function normalizeIsbn(raw: string): string {
-  return raw.replace(/[\s-]/g, '').toUpperCase();
-}
-
-/** Real ISBN-10 / ISBN-13 checksum validation. */
-export function isValidIsbn(raw: string): boolean {
-  const isbn = normalizeIsbn(raw);
-  if (/^\d{9}[\dX]$/.test(isbn)) {
-    const sum = isbn
-      .split('')
-      .reduce((acc, ch, i) => acc + (ch === 'X' ? 10 : Number(ch)) * (10 - i), 0);
-    return sum % 11 === 0;
-  }
-  if (/^\d{13}$/.test(isbn)) {
-    const sum = isbn
-      .split('')
-      .reduce((acc, ch, i) => acc + Number(ch) * (i % 2 === 0 ? 1 : 3), 0);
-    return sum % 10 === 0;
-  }
-  return false;
-}
-
 export async function sha256Hex(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
   const digest = await crypto.subtle.digest('SHA-256', buf);

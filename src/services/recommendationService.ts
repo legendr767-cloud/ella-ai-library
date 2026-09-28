@@ -63,7 +63,11 @@ export const recommendationService = {
       .select('*, category:categories(*)')
       .eq('status', 'available')
       .neq('id', bookId)
-      .or(`category_id.eq.${sourceBook.category_id},author.ilike.%${sourceBook.author}%`)
+      .or(
+        sourceBook.author
+          ? `category_id.eq.${sourceBook.category_id},author.ilike.%${sourceBook.author}%`
+          : `category_id.eq.${sourceBook.category_id}`
+      )
       .order('average_rating', { ascending: false })
       .limit(limit);
 
