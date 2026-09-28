@@ -21,36 +21,22 @@ import { Input } from '@/components/ui/Input';
 import { bookService } from '@/services/bookService';
 import { categoryService } from '@/services/categoryService';
 import { Book, Category } from '@/types';
-import {
-  formatBytes,
-  isValidIsbn,
-  normalizeIsbn,
-  validateBookFile,
-  validateCoverFile,
-} from '@/utils/documents';
+import { formatBytes, validateBookFile, validateCoverFile } from '@/utils/documents';
 
 interface FormState {
   title: string;
   author: string;
-  isbn: string;
-  publisher: string;
   category_id: string;
-  published_year: number;
   language: string;
   description: string;
-  quantity: number;
 }
 
 const emptyForm: FormState = {
   title: '',
   author: '',
-  isbn: '',
-  publisher: '',
   category_id: '',
-  published_year: new Date().getFullYear(),
   language: 'en',
   description: '',
-  quantity: 1,
 };
 
 export default function AdminBooks() {
@@ -118,12 +104,7 @@ export default function AdminBooks() {
   };
 
   const handleSave = async () => {
-    if (!form.title.trim() || !form.author.trim()) {
-      return toast.error('Title and author are required.');
-    }
-    if (!isValidIsbn(form.isbn)) {
-      return toast.error('Enter a valid ISBN-10 or ISBN-13 (checksum failed).');
-    }
+    if (!form.title.trim()) return toast.error('Please enter a title.');
     if (!file) return toast.error('Choose the book file (PDF or EPUB) to upload.');
 
     setSaving(true);
@@ -131,15 +112,12 @@ export default function AdminBooks() {
       await bookService.createBookWithFiles(
         {
           title: form.title.trim(),
-          author: form.author.trim(),
-          isbn: normalizeIsbn(form.isbn),
-          publisher: form.publisher.trim() || null,
+          author: form.author.trim() || null,
           category_id: form.category_id || undefined,
-          published_year: form.published_year,
           language: form.language,
           description: form.description.trim(),
-          quantity: form.quantity,
-          available_quantity: form.quantity,
+          quantity: 1,
+          available_quantity: 1,
           status: 'available',
         },
         file,
@@ -150,12 +128,7 @@ export default function AdminBooks() {
       setShowModal(false);
       load();
     } catch (e: any) {
-      const msg: string = e.message || 'Upload failed';
-      toast.error(
-        msg.includes('duplicate') || msg.includes('isbn')
-          ? 'A book with this ISBN already exists.'
-          : msg
-      );
+      toast.error(e.message || 'Upload failed');
     } finally {
       setSaving(false);
     }
@@ -233,7 +206,7 @@ export default function AdminBooks() {
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search title, author..."
+                placeholder="Search books..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"
@@ -252,7 +225,7 @@ export default function AdminBooks() {
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
                     <th className="pb-3 font-medium">Title / Author</th>
-                    <th className="pb-3 font-medium">ISBN</th>
+                    <th className="pb-3 font-medium">Category</th>
                     <th className="pb-3 font-medium">File</th>
                     <th className="pb-3 font-medium">Downloads</th>
                     <th className="pb-3 font-medium">Status</th>
@@ -273,11 +246,11 @@ export default function AdminBooks() {
                           )}
                           <div>
                             <p className="font-medium">{book.title}</p>
-                            <p className="text-xs text-muted-foreground">{book.author}</p>
+                            {book.author && <p className="text-xs text-muted-foreground">{book.author}</p>}
                           </div>
                         </div>
                       </td>
-                      <td className="py-3 font-mono text-xs">{book.isbn}</td>
+                      <td className="py-3 text-xs">{book.category?.name ?? '—'}</td>
                       <td className="py-3">
                         {book.file_path ? (
                           <span className="inline-flex items-center gap-1 text-xs">
@@ -358,16 +331,8 @@ export default function AdminBooks() {
                     <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
                   </div>
                   <div className="col-span-2 space-y-1">
-                    <label className="text-sm font-medium">Author *</label>
+                    <label className="text-sm font-medium">Author <span className="text-muted-foreground font-normal">(optional)</span></label>
                     <Input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">ISBN *</label>
-                    <Input value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} placeholder="978-..." />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">Publisher</label>
-                    <Input value={form.publisher} onChange={(e) => setForm({ ...form, publisher: e.target.value })} />
                   </div>
                   <div className="space-y-1">
                     <label className="text-sm font-medium">Category</label>
@@ -377,8 +342,19 @@ export default function AdminBooks() {
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-sm font-medium">Published Year</label>
-                    <Input type="number" value={form.published_year} onChange={(e) => setForm({ ...form, published_year: Number(e.target.value) })} />
+                    <label className="text-sm font-medium">Language</label>
+                    <select className="w-full px-3 py-2 rounded-md border bg-background text-sm" value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value })}>
+                      <option value="en">English</option>
+                      <option value="fr">French</option>
+                      <option value="es">Spanish</option>
+                      <option value="pt">Portuguese</option>
+                      <option value="de">German</option>
+                      <option value="ar">Arabic</option>
+                      <option value="yo">Yoruba</option>
+                      <option value="ig">Igbo</option>
+                      <option value="ha">Hausa</option>
+                      <option value="other">Other</option>
+                    </select>
                   </div>
                   <div className="col-span-2 space-y-1">
                     <label className="text-sm font-medium">Description</label>

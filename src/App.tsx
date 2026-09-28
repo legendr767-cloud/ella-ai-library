@@ -14,6 +14,7 @@ import AdminLayout from '@/components/layouts/AdminLayout';
 import LoginPage from '@/pages/auth/LoginPage';
 import RegisterPage from '@/pages/auth/RegisterPage';
 import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage';
+import EmailVerifiedPage from '@/pages/auth/EmailVerifiedPage';
 
 // Public Pages
 import HomePage from '@/pages/HomePage';
@@ -67,6 +68,7 @@ function App() {
           <Route path={ROUTES.LOGIN} element={<LoginPage />} />
           <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
           <Route path={ROUTES.FORGOT_PASSWORD} element={<ForgotPasswordPage />} />
+          <Route path="/email-verified" element={<EmailVerifiedPage />} />
         </Route>
 
         {/* Protected User Routes */}

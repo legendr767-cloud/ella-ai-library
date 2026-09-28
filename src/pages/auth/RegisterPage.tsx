@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Mail, Lock, User, Eye, EyeOff, UserPlus, Check, ArrowLeft } from 'lucide-react';
@@ -9,7 +9,7 @@ import { useAuthStore } from '@/store/authStore';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { register } = useAuthStore();
+  const { register, resendVerification } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -21,7 +21,26 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [authError, setAuthError] = useState('');
   const [emailSent, setEmailSent] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const [resendMsg, setResendMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  const handleResend = async () => {
+    setResendMsg('');
+    try {
+      await resendVerification(formData.email);
+      setResendMsg('A new verification email is on its way.');
+      setCooldown(60);
+    } catch (e: any) {
+      setResendMsg(e?.message || 'Could not resend the email. Please try again shortly.');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,15 +64,15 @@ export default function RegisterPage() {
     }
 
     try {
-      await register(formData.email, formData.password, formData.name);
-      navigate('/dashboard');
-    } catch (error: any) {
-      const msg: string = error?.message || '';
-      if (msg.toLowerCase().includes('check your email') || msg.toLowerCase().includes('confirm')) {
+      const { needsVerification } = await register(formData.email, formData.password, formData.name);
+      if (needsVerification) {
         setEmailSent(true);
+        setCooldown(60);
       } else {
-        setAuthError(msg || 'Registration failed. Please try again.');
+        navigate('/');
       }
+    } catch (error: any) {
+      setAuthError(error?.message || 'Registration failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -90,7 +109,7 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-3xl font-bold">Create Account</CardTitle>
-          <CardDescription>Sign up to start your reading journey with Ella's Library</CardDescription>
+          <CardDescription>Sign up to start reading with Ella's Library</CardDescription>
         </CardHeader>
         <CardContent>
           {emailSent ? (
@@ -99,11 +118,16 @@ export default function RegisterPage() {
                 <div className="p-4 rounded-full bg-green-500/10">
                   <Check className="w-8 h-8 text-green-500" />
                 </div>
-                <h3 className="text-lg font-semibold">Account Created!</h3>
+                <h3 className="text-lg font-semibold">Verify your email</h3>
                 <p className="text-sm text-muted-foreground">
-                  A confirmation link has been sent to <strong>{formData.email}</strong>.
-                  Please check your inbox and click the link to activate your account.
+                  We sent a verification link to <strong>{formData.email}</strong>.
+                  Click it to activate your account. You won't be able to sign in until your email is verified.
                 </p>
+                <p className="text-xs text-muted-foreground">Can't find it? Check your spam folder.</p>
+                <Button variant="outline" size="sm" onClick={handleResend} disabled={cooldown > 0}>
+                  {cooldown > 0 ? `Resend email in ${cooldown}s` : 'Resend verification email'}
+                </Button>
+                {resendMsg && <p className="text-xs text-muted-foreground">{resendMsg}</p>}
                 <Link to="/login" className="text-primary hover:underline text-sm font-medium">
                   Back to Sign In
                 </Link>

@@ -56,8 +56,8 @@ export interface Tag {
 export interface Book {
   id: string;
   title: string;
-  author: string;
-  isbn: string;
+  author?: string | null;
+  isbn?: string | null;
   description: string;
   category_id: string;
   category?: Category;
@@ -284,8 +284,8 @@ export interface ResetPasswordFormData {
 
 export interface BookFormData {
   title: string;
-  author: string;
-  isbn: string;
+  author?: string | null;
+  isbn?: string | null;
   description: string;
   category_id: string;
   tags: string[];
