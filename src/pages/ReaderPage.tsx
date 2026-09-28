@@ -1,351 +1,252 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { Document, Page, pdfjs } from 'react-pdf';
+import toast from 'react-hot-toast';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
 import {
   ChevronLeft,
   ChevronRight,
-  BookOpen,
   Bookmark,
-  Highlighter,
-  MessageSquare,
-  Settings,
+  BookmarkCheck,
   ZoomIn,
   ZoomOut,
   Sun,
   Moon,
-  Type,
-  X,
-  Menu,
-  Search,
+  BookOpen,
+  Download,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Card, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { bookService } from '@/services/bookService';
+import { supabase } from '@/config/supabase';
+import { useAuthStore } from '@/store/authStore';
+import { Book } from '@/types';
 
-const mockBook = {
-  id: 1,
-  title: 'The Great Gatsby',
-  author: 'F. Scott Fitzgerald',
-  currentPage: 45,
-  totalPages: 180,
-  progress: 25,
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.js',
+  import.meta.url
+).toString();
+
+type ReaderTheme = 'light' | 'sepia' | 'dark';
+
+const themeClasses: Record<ReaderTheme, string> = {
+  light: 'bg-gray-100',
+  sepia: 'bg-[#f4ecd8]',
+  dark: 'bg-gray-900',
 };
-
-const mockBookmarks = [
-  { page: 12, note: 'Important quote about dreams' },
-  { page: 34, note: 'Character introduction' },
-  { page: 45, note: 'Current position' },
-];
-
-const mockHighlights = [
-  { page: 15, text: 'So we beat on, boats against the current...', color: 'yellow' },
-  { page: 28, text: 'Gatsby believed in the green light...', color: 'green' },
-];
 
 export default function ReaderPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [currentPage, setCurrentPage] = useState(mockBook.currentPage);
-  const [fontSize, setFontSize] = useState(16);
-  const [readerTheme, setReaderTheme] = useState<'light' | 'dark' | 'sepia'>('light');
-  const [showSidebar, setShowSidebar] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState<'bookmarks' | 'highlights' | 'notes'>('bookmarks');
+  const user = useAuthStore((s) => s.user);
 
-  const nextPage = () => {
-    if (currentPage < mockBook.totalPages) {
-      setCurrentPage(currentPage + 1);
+  const [book, setBook] = useState<Book | null>(null);
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [numPages, setNumPages] = useState(0);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [zoom, setZoom] = useState(1);
+  const [theme, setTheme] = useState<ReaderTheme>('light');
+  const [bookmarks, setBookmarks] = useState<number[]>([]);
+  const [width, setWidth] = useState(800);
+  const [startPage, setStartPage] = useState(1);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  // Load book, signed URL, saved progress and bookmarks
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const b = await bookService.getBookById(id);
+        if (!b.file_path) throw new Error('This book has no digital file yet.');
+        const signed = await bookService.getReadUrl(b);
+        if (cancelled) return;
+        setBook(b);
+        setUrl(signed);
+
+        if (user) {
+          const [{ data: prog }, { data: marks }] = await Promise.all([
+            supabase.from('reading_progress').select('current_page').eq('user_id', user.id).eq('book_id', id).maybeSingle(),
+            supabase.from('bookmarks').select('page_number').eq('user_id', user.id).eq('book_id', id),
+          ]);
+          if (cancelled) return;
+          if (prog?.current_page && prog.current_page > 0) {
+            setStartPage(prog.current_page);
+            setPageNumber(prog.current_page);
+          }
+          setBookmarks((marks ?? []).map((m: any) => m.page_number));
+        }
+      } catch (e: any) {
+        if (!cancelled) setError(e.message || 'Could not open this book.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id, user]);
+
+  // Keep page width in sync with the window
+  useEffect(() => {
+    const update = () => setWidth(Math.min(wrapRef.current?.clientWidth ?? 800, 1000) - 32);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [book]);
+
+  // Save reading progress (debounced)
+  useEffect(() => {
+    if (!user || !id || !numPages) return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      supabase.from('reading_progress').upsert(
+        {
+          user_id: user.id,
+          book_id: id,
+          current_page: pageNumber,
+          total_pages: numPages,
+          progress_percentage: Math.round((pageNumber / numPages) * 10000) / 100,
+          is_completed: pageNumber >= numPages,
+          last_read_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,book_id' }
+      );
+    }, 800);
+    return () => clearTimeout(saveTimer.current);
+  }, [pageNumber, numPages, user, id]);
+
+  const go = useCallback(
+    (delta: number) => setPageNumber((p) => Math.min(Math.max(p + delta, 1), numPages || 1)),
+    [numPages]
+  );
+
+  // Keyboard navigation
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') go(1);
+      if (e.key === 'ArrowLeft') go(-1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [go]);
+
+  const toggleBookmark = async () => {
+    if (!user || !id) return;
+    const has = bookmarks.includes(pageNumber);
+    if (has) {
+      await supabase.from('bookmarks').delete().eq('user_id', user.id).eq('book_id', id).eq('page_number', pageNumber);
+      setBookmarks(bookmarks.filter((p) => p !== pageNumber));
+    } else {
+      const { error: err } = await supabase.from('bookmarks').insert({ user_id: user.id, book_id: id, page_number: pageNumber });
+      if (err) return toast.error('Could not save bookmark');
+      setBookmarks([...bookmarks, pageNumber].sort((a, b) => a - b));
     }
   };
 
-  const prevPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
+  const download = async () => {
+    if (!book) return;
+    try {
+      window.location.href = await bookService.getDownloadUrl(book);
+    } catch (e: any) {
+      toast.error(e.message || 'Download failed');
     }
   };
 
-  const increaseFontSize = () => {
-    if (fontSize < 24) setFontSize(fontSize + 2);
-  };
-
-  const decreaseFontSize = () => {
-    if (fontSize > 12) setFontSize(fontSize - 2);
-  };
-
-  const themeColors = {
-    light: 'bg-white text-gray-900',
-    dark: 'bg-gray-900 text-gray-100',
-    sepia: 'bg-[#f4ecd8] text-[#5c4a3a]',
-  };
+  const isPdf = book?.file_type !== 'epub';
 
   return (
     <div className="fixed inset-0 bg-background flex flex-col">
-      {/* Top Bar */}
-      <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-50">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigate(-1)}
-                className="gap-2"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Back
-              </Button>
-              <div>
-                <h1 className="font-semibold">{mockBook.title}</h1>
-                <p className="text-xs text-muted-foreground">{mockBook.author}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {/* Font Size Controls */}
-              <div className="hidden md:flex items-center gap-2 border rounded-lg p-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={decreaseFontSize}
-                  disabled={fontSize <= 12}
-                >
-                  <Type className="w-4 h-4" />
-                  <span className="text-xs ml-1">-</span>
-                </Button>
-                <span className="text-xs px-2">{fontSize}px</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={increaseFontSize}
-                  disabled={fontSize >= 24}
-                >
-                  <Type className="w-5 h-5" />
-                  <span className="text-xs ml-1">+</span>
-                </Button>
-              </div>
-
-              {/* Theme Toggle */}
-              <div className="hidden md:flex items-center gap-1 border rounded-lg p-1">
-                <Button
-                  variant={readerTheme === 'light' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setReaderTheme('light')}
-                >
-                  <Sun className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant={readerTheme === 'sepia' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setReaderTheme('sepia')}
-                >
-                  <BookOpen className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant={readerTheme === 'dark' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setReaderTheme('dark')}
-                >
-                  <Moon className="w-4 h-4" />
-                </Button>
-              </div>
-
-              {/* Tools */}
-              <Button variant="ghost" size="sm">
-                <Search className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="sm">
-                <Highlighter className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="sm">
-                <Bookmark className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowSidebar(!showSidebar)}
-              >
-                <Menu className="w-4 h-4" />
-              </Button>
+      {/* Top bar */}
+      <div className="border-b bg-background z-10">
+        <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-1">
+              <ChevronLeft className="w-4 h-4" /> Back
+            </Button>
+            <div className="min-w-0">
+              <h1 className="font-semibold truncate">{book?.title ?? 'Loading…'}</h1>
+              <p className="text-xs text-muted-foreground truncate">{book?.author}</p>
             </div>
           </div>
 
-          {/* Progress Bar */}
-          <div className="mt-3">
-            <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-              <span>Page {currentPage} of {mockBook.totalPages}</span>
-              <span>{Math.round((currentPage / mockBook.totalPages) * 100)}% complete</span>
+          {isPdf && url && (
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}><ZoomOut className="w-4 h-4" /></Button>
+              <span className="text-xs w-10 text-center">{Math.round(zoom * 100)}%</span>
+              <Button variant="ghost" size="sm" onClick={() => setZoom((z) => Math.min(3, z + 0.25))}><ZoomIn className="w-4 h-4" /></Button>
+              <div className="hidden md:flex border rounded-lg p-1 mx-2 gap-1">
+                <Button variant={theme === 'light' ? 'default' : 'ghost'} size="sm" onClick={() => setTheme('light')}><Sun className="w-4 h-4" /></Button>
+                <Button variant={theme === 'sepia' ? 'default' : 'ghost'} size="sm" onClick={() => setTheme('sepia')}><BookOpen className="w-4 h-4" /></Button>
+                <Button variant={theme === 'dark' ? 'default' : 'ghost'} size="sm" onClick={() => setTheme('dark')}><Moon className="w-4 h-4" /></Button>
+              </div>
+              <Button variant="ghost" size="sm" onClick={toggleBookmark} title="Bookmark this page">
+                {bookmarks.includes(pageNumber) ? <BookmarkCheck className="w-4 h-4 text-primary" /> : <Bookmark className="w-4 h-4" />}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={download} title="Download"><Download className="w-4 h-4" /></Button>
             </div>
-            <div className="w-full bg-muted rounded-full h-1.5">
-              <div
-                className="h-full bg-primary rounded-full transition-all duration-300"
-                style={{ width: `${(currentPage / mockBook.totalPages) * 100}%` }}
-              />
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Reader Area */}
-        <div className="flex-1 overflow-auto">
-          <div className="container mx-auto px-4 py-8 max-w-4xl">
-            <motion.div
-              key={currentPage}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3 }}
-              className={`${themeColors[readerTheme]} rounded-lg p-8 md:p-12 shadow-lg min-h-[600px]`}
-              style={{ fontSize: `${fontSize}px`, lineHeight: 1.8 }}
-            >
-              <h2 className="text-2xl font-bold mb-6">Chapter {Math.ceil(currentPage / 10)}</h2>
-              
-              <div className="space-y-4">
-                <p>
-                  In my younger and more vulnerable years my father gave me some advice that I've been turning over in my mind ever since.
-                </p>
-                <p>
-                  "Whenever you feel like criticizing any one," he told me, "just remember that all the people in this world haven't had the advantages that you've had."
-                </p>
-                <p>
-                  He didn't say any more, but we've always been unusually communicative in a reserved way, and I understood that he meant a great deal more than that.
-                </p>
-                <p className="bg-yellow-200/30 px-2 py-1 rounded">
-                  In consequence, I'm inclined to reserve all judgments, a habit that has opened up many curious natures to me and also made me the victim of not a few veteran bores.
-                </p>
-                <p>
-                  The abnormal mind is quick to detect and attach itself to this quality when it appears in a normal person, and so it came about that in college I was unjustly accused of being a politician, because I was privy to the secret griefs of wild, unknown men.
-                </p>
-                <p>
-                  Most of the confidences were unsought—frequently I have feigned sleep, preoccupation, or a hostile levity when I realized by some unmistakable sign that an intimate revelation was quivering on the horizon.
-                </p>
-                <p>
-                  The young privileged have always been with us, but in my generation they were more numerous than ever before.
-                </p>
-              </div>
-
-              {/* Page Number */}
-              <div className="mt-12 text-center text-sm opacity-50">
-                {currentPage}
-              </div>
-            </motion.div>
-
-            {/* Navigation Buttons */}
-            <div className="flex items-center justify-between mt-8">
-              <Button
-                variant="outline"
-                onClick={prevPage}
-                disabled={currentPage <= 1}
-                className="gap-2"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Previous
-              </Button>
-              <div className="text-sm text-muted-foreground">
-                Page {currentPage} of {mockBook.totalPages}
-              </div>
-              <Button
-                variant="outline"
-                onClick={nextPage}
-                disabled={currentPage >= mockBook.totalPages}
-                className="gap-2"
-              >
-                Next
-                <ChevronRight className="w-4 h-4" />
-              </Button>
+      {/* Body */}
+      <div ref={wrapRef} className={`flex-1 overflow-auto ${themeClasses[theme]} transition-colors`}>
+        {error ? (
+          <div className="h-full flex items-center justify-center text-center p-6">
+            <div>
+              <p className="mb-4 text-red-500">{error}</p>
+              <Button variant="outline" onClick={() => navigate(-1)}>Go back</Button>
             </div>
           </div>
-        </div>
-
-        {/* Sidebar */}
-        {showSidebar && (
-          <motion.div
-            initial={{ x: 300 }}
-            animate={{ x: 0 }}
-            exit={{ x: 300 }}
-            className="w-80 border-l bg-background overflow-auto"
-          >
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold">Reading Tools</h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowSidebar(false)}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-
-              {/* Tabs */}
-              <div className="flex gap-2 mb-4">
-                {(['bookmarks', 'highlights', 'notes'] as const).map((tab) => (
-                  <Button
-                    key={tab}
-                    variant={sidebarTab === tab ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setSidebarTab(tab)}
-                    className="flex-1 capitalize"
-                  >
-                    {tab}
-                  </Button>
-                ))}
-              </div>
-
-              {/* Content */}
-              <div className="space-y-3">
-                {sidebarTab === 'bookmarks' && (
-                  <>
-                    {mockBookmarks.map((bookmark, index) => (
-                      <Card key={index} className="cursor-pointer hover:bg-muted/50">
-                        <CardContent className="p-3">
-                          <div className="flex items-start gap-2">
-                            <Bookmark className="w-4 h-4 mt-1 text-primary" />
-                            <div className="flex-1">
-                              <div className="text-sm font-medium mb-1">Page {bookmark.page}</div>
-                              <p className="text-xs text-muted-foreground">{bookmark.note}</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </>
-                )}
-
-                {sidebarTab === 'highlights' && (
-                  <>
-                    {mockHighlights.map((highlight, index) => (
-                      <Card key={index} className="cursor-pointer hover:bg-muted/50">
-                        <CardContent className="p-3">
-                          <div className="flex items-start gap-2">
-                            <Highlighter className="w-4 h-4 mt-1 text-yellow-500" />
-                            <div className="flex-1">
-                              <div className="text-sm font-medium mb-1">Page {highlight.page}</div>
-                              <p className="text-xs italic">"{highlight.text}"</p>
-                              <Badge variant="outline" className="mt-2 text-xs">
-                                {highlight.color}
-                              </Badge>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </>
-                )}
-
-                {sidebarTab === 'notes' && (
-                  <Card>
-                    <CardContent className="p-4 text-center">
-                      <MessageSquare className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">No notes yet</p>
-                      <Button size="sm" className="mt-3">Add Note</Button>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+        ) : !url || !book ? (
+          <div className="h-full flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
+        ) : !isPdf ? (
+          <div className="h-full flex items-center justify-center text-center p-6">
+            <div className="max-w-sm">
+              <BookOpen className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
+              <p className="mb-4">EPUB files can’t be previewed in the browser yet. Download it to read in your e-reader app.</p>
+              <Button onClick={download} className="gap-2"><Download className="w-4 h-4" />Download EPUB</Button>
             </div>
-          </motion.div>
+          </div>
+        ) : (
+          <div className="flex justify-center py-4">
+            <div className={theme === 'dark' ? 'invert hue-rotate-180' : theme === 'sepia' ? 'sepia' : ''}>
+              <Document
+                file={url}
+                onLoadSuccess={({ numPages: n }) => {
+                  setNumPages(n);
+                  setPageNumber(Math.min(startPage, n));
+                }}
+                onLoadError={() => setError('The file could not be loaded.')}
+                loading={<Loader2 className="w-8 h-8 animate-spin mx-auto my-20 text-muted-foreground" />}
+              >
+                <Page pageNumber={pageNumber} width={width * zoom} className="shadow-lg" />
+              </Document>
+            </div>
+          </div>
         )}
       </div>
+
+      {/* Footer controls */}
+      {isPdf && url && numPages > 0 && !error && (
+        <div className="border-t bg-background py-2">
+          <div className="container mx-auto px-4 flex items-center justify-center gap-3">
+            <Button variant="outline" size="sm" onClick={() => go(-1)} disabled={pageNumber <= 1}><ChevronLeft className="w-4 h-4" /></Button>
+            <div className="flex items-center gap-2 text-sm">
+              <input
+                type="number"
+                min={1}
+                max={numPages}
+                value={pageNumber}
+                onChange={(e) => setPageNumber(Math.min(Math.max(Number(e.target.value) || 1, 1), numPages))}
+                className="w-16 px-2 py-1 rounded border bg-background text-center"
+              />
+              <span className="text-muted-foreground">of {numPages}</span>
+              <span className="text-muted-foreground hidden sm:inline">· {Math.round((pageNumber / numPages) * 100)}%</span>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => go(1)} disabled={pageNumber >= numPages}><ChevronRight className="w-4 h-4" /></Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

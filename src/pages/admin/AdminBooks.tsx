@@ -1,120 +1,222 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 import {
   Search,
   Plus,
-  Edit,
   Trash2,
   BookOpen,
-  Star,
   X,
-  Save,
+  Upload,
+  Download,
+  BadgeCheck,
+  FileText,
+  Loader2,
+  ShieldCheck,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { bookService } from '@/services/bookService';
+import { categoryService } from '@/services/categoryService';
+import { Book, Category } from '@/types';
+import {
+  formatBytes,
+  isValidIsbn,
+  normalizeIsbn,
+  validateBookFile,
+  validateCoverFile,
+} from '@/utils/documents';
 
-interface BookEntry {
-  id: number;
+interface FormState {
   title: string;
   author: string;
   isbn: string;
-  category: string;
-  year: number;
+  publisher: string;
+  category_id: string;
+  published_year: number;
+  language: string;
+  description: string;
   quantity: number;
-  available: number;
-  rating: number;
-  status: string;
 }
 
-const initialBooks: BookEntry[] = [
-  { id: 1, title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', isbn: '9780743273565', category: 'Fiction', year: 1925, quantity: 5, available: 3, rating: 4.5, status: 'available' },
-  { id: 2, title: '1984', author: 'George Orwell', isbn: '9780451524935', category: 'Science Fiction', year: 1949, quantity: 4, available: 0, rating: 4.7, status: 'borrowed' },
-  { id: 3, title: 'To Kill a Mockingbird', author: 'Harper Lee', isbn: '9780061935466', category: 'Fiction', year: 1960, quantity: 6, available: 4, rating: 4.8, status: 'available' },
-  { id: 4, title: 'Pride and Prejudice', author: 'Jane Austen', isbn: '9780141439518', category: 'Romance', year: 1813, quantity: 3, available: 2, rating: 4.6, status: 'available' },
-  { id: 5, title: 'The Hobbit', author: 'J.R.R. Tolkien', isbn: '9780547928227', category: 'Fantasy', year: 1937, quantity: 4, available: 1, rating: 4.8, status: 'available' },
-  { id: 6, title: 'Harry Potter', author: 'J.K. Rowling', isbn: '9780439708180', category: 'Fantasy', year: 1997, quantity: 8, available: 5, rating: 4.9, status: 'available' },
-  { id: 7, title: 'Brave New World', author: 'Aldous Huxley', isbn: '9780060850524', category: 'Science Fiction', year: 1932, quantity: 2, available: 2, rating: 4.4, status: 'available' },
-  { id: 8, title: 'The Catcher in the Rye', author: 'J.D. Salinger', isbn: '9780316769174', category: 'Fiction', year: 1951, quantity: 3, available: 0, rating: 4.3, status: 'borrowed' },
-];
-
-const emptyForm: Omit<BookEntry, 'id'> = {
-  title: '', author: '', isbn: '', category: 'Fiction', year: 2024,
-  quantity: 1, available: 1, rating: 0, status: 'available',
+const emptyForm: FormState = {
+  title: '',
+  author: '',
+  isbn: '',
+  publisher: '',
+  category_id: '',
+  published_year: new Date().getFullYear(),
+  language: 'en',
+  description: '',
+  quantity: 1,
 };
 
-const categories = ['Fiction', 'Science Fiction', 'Fantasy', 'Romance', 'Non-Fiction', 'History', 'Science', 'Technology', 'Philosophy', 'Business'];
-
 export default function AdminBooks() {
-  const [books, setBooks] = useState<BookEntry[]>(initialBooks);
+  const [books, setBooks] = useState<Book[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [editingBook, setEditingBook] = useState<BookEntry | null>(null);
-  const [form, setForm] = useState<Omit<BookEntry, 'id'>>(emptyForm);
-  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [form, setForm] = useState<FormState>(emptyForm);
+  const [file, setFile] = useState<File | null>(null);
+  const [fileType, setFileType] = useState<'pdf' | 'epub'>('pdf');
+  const [cover, setCover] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Book | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const filtered = books.filter(b =>
-    b.title.toLowerCase().includes(search.toLowerCase()) ||
-    b.author.toLowerCase().includes(search.toLowerCase()) ||
-    b.isbn.includes(search)
-  );
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [b, c] = await Promise.all([
+        bookService.getBooks(search ? { search } : undefined, 1, 100),
+        categoryService.getCategories(),
+      ]);
+      setBooks(b.data);
+      setCategories(c);
+    } catch (e: any) {
+      toast.error(e.message || 'Could not load books');
+    } finally {
+      setLoading(false);
+    }
+  }, [search]);
+
+  useEffect(() => {
+    const t = setTimeout(load, 250); // debounce search
+    return () => clearTimeout(t);
+  }, [load]);
 
   const openAdd = () => {
-    setEditingBook(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, category_id: categories[0]?.id ?? '' });
+    setFile(null);
+    setCover(null);
     setShowModal(true);
   };
 
-  const openEdit = (book: BookEntry) => {
-    setEditingBook(book);
-    setForm({ title: book.title, author: book.author, isbn: book.isbn, category: book.category, year: book.year, quantity: book.quantity, available: book.available, rating: book.rating, status: book.status });
-    setShowModal(true);
-  };
-
-  const handleSave = () => {
-    if (!form.title || !form.author) return;
-    if (editingBook) {
-      setBooks(books.map(b => b.id === editingBook.id ? { ...form, id: editingBook.id } : b));
-    } else {
-      setBooks([...books, { ...form, id: Date.now() }]);
+  const onPickFile = async (f: File | null) => {
+    if (!f) return setFile(null);
+    const result = await validateBookFile(f);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
     }
-    setShowModal(false);
+    setFile(f);
+    setFileType(result.type);
+    // Pre-fill the title from the file name if empty
+    if (!form.title) {
+      setForm((prev) => ({ ...prev, title: f.name.replace(/\.(pdf|epub)$/i, '').replace(/[_-]+/g, ' ') }));
+    }
   };
 
-  const handleDelete = (id: number) => {
-    setBooks(books.filter(b => b.id !== id));
-    setDeleteConfirm(null);
+  const onPickCover = async (f: File | null) => {
+    if (!f) return setCover(null);
+    const err = await validateCoverFile(f);
+    if (err) return toast.error(err);
+    setCover(f);
   };
 
-  const statusColor: Record<string, string> = {
-    available: 'default',
-    borrowed: 'secondary',
-    maintenance: 'destructive',
+  const handleSave = async () => {
+    if (!form.title.trim() || !form.author.trim()) {
+      return toast.error('Title and author are required.');
+    }
+    if (!isValidIsbn(form.isbn)) {
+      return toast.error('Enter a valid ISBN-10 or ISBN-13 (checksum failed).');
+    }
+    if (!file) return toast.error('Choose the book file (PDF or EPUB) to upload.');
+
+    setSaving(true);
+    try {
+      await bookService.createBookWithFiles(
+        {
+          title: form.title.trim(),
+          author: form.author.trim(),
+          isbn: normalizeIsbn(form.isbn),
+          publisher: form.publisher.trim() || null,
+          category_id: form.category_id || undefined,
+          published_year: form.published_year,
+          language: form.language,
+          description: form.description.trim(),
+          quantity: form.quantity,
+          available_quantity: form.quantity,
+          status: 'available',
+        },
+        file,
+        fileType,
+        cover
+      );
+      toast.success('Book uploaded and published to the library.');
+      setShowModal(false);
+      load();
+    } catch (e: any) {
+      const msg: string = e.message || 'Upload failed';
+      toast.error(
+        msg.includes('duplicate') || msg.includes('isbn')
+          ? 'A book with this ISBN already exists.'
+          : msg
+      );
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await bookService.deleteBook(deleteTarget.id);
+      toast.success('Book and its files were deleted.');
+      setDeleteTarget(null);
+      load();
+    } catch (e: any) {
+      toast.error(e.message || 'Delete failed');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDownload = async (book: Book) => {
+    try {
+      const url = await bookService.getDownloadUrl(book);
+      window.location.href = url;
+    } catch (e: any) {
+      toast.error(e.message || 'Download failed');
+    }
+  };
+
+  const toggleVerified = async (book: Book) => {
+    try {
+      await bookService.setVerified(book.id, !book.is_verified);
+      toast.success(book.is_verified ? 'Verification removed' : 'Marked as verified');
+      load();
+    } catch (e: any) {
+      toast.error(e.message || 'Could not update');
+    }
+  };
+
+  const withFile = books.filter((b) => b.file_path).length;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold mb-1">Manage Books</h1>
-          <p className="text-muted-foreground">Add, edit, and manage the library book catalogue</p>
+          <p className="text-muted-foreground">Upload, download and delete real book files</p>
         </div>
         <Button onClick={openAdd} className="gap-2">
           <Plus className="w-4 h-4" />
-          Add Book
+          Upload Book
         </Button>
       </div>
 
-      {/* Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Total Books', value: books.length },
-          { label: 'Available', value: books.filter(b => b.status === 'available').length },
-          { label: 'Borrowed', value: books.filter(b => b.status === 'borrowed').length },
-          { label: 'Total Copies', value: books.reduce((s, b) => s + b.quantity, 0) },
-        ].map(item => (
+          { label: 'With Digital File', value: withFile },
+          { label: 'Verified', value: books.filter((b) => b.is_verified).length },
+          { label: 'Downloads', value: books.reduce((s, b) => s + (b.download_count ?? 0), 0) },
+        ].map((item) => (
           <Card key={item.label}>
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold">{item.value}</p>
@@ -124,7 +226,6 @@ export default function AdminBooks() {
         ))}
       </div>
 
-      {/* Table */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-4">
@@ -132,164 +233,168 @@ export default function AdminBooks() {
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search books..."
+                placeholder="Search title, author..."
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"
               />
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="pb-3 font-medium">Title / Author</th>
-                  <th className="pb-3 font-medium">ISBN</th>
-                  <th className="pb-3 font-medium">Category</th>
-                  <th className="pb-3 font-medium">Year</th>
-                  <th className="pb-3 font-medium">Copies</th>
-                  <th className="pb-3 font-medium">Rating</th>
-                  <th className="pb-3 font-medium">Status</th>
-                  <th className="pb-3 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((book, index) => (
-                  <motion.tr
-                    key={book.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: index * 0.03 }}
-                    className="border-b last:border-0 hover:bg-muted/50 transition-colors"
-                  >
-                    <td className="py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <BookOpen className="w-4 h-4 text-primary" />
+          {loading ? (
+            <div className="py-12 flex justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="pb-3 font-medium">Title / Author</th>
+                    <th className="pb-3 font-medium">ISBN</th>
+                    <th className="pb-3 font-medium">File</th>
+                    <th className="pb-3 font-medium">Downloads</th>
+                    <th className="pb-3 font-medium">Status</th>
+                    <th className="pb-3 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {books.map((book) => (
+                    <tr key={book.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
+                      <td className="py-3">
+                        <div className="flex items-center gap-3">
+                          {book.cover_image_url ? (
+                            <img src={book.cover_image_url} alt="" className="w-8 h-11 rounded object-cover" />
+                          ) : (
+                            <div className="w-8 h-11 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <BookOpen className="w-4 h-4 text-primary" />
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-medium">{book.title}</p>
+                            <p className="text-xs text-muted-foreground">{book.author}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium">{book.title}</p>
-                          <p className="text-xs text-muted-foreground">{book.author}</p>
+                      </td>
+                      <td className="py-3 font-mono text-xs">{book.isbn}</td>
+                      <td className="py-3">
+                        {book.file_path ? (
+                          <span className="inline-flex items-center gap-1 text-xs">
+                            <FileText className="w-3 h-3" />
+                            {book.file_type?.toUpperCase()} · {formatBytes(book.file_size_bytes)}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No file</span>
+                        )}
+                      </td>
+                      <td className="py-3">{book.download_count ?? 0}</td>
+                      <td className="py-3">
+                        {book.is_verified ? (
+                          <Badge className="gap-1"><BadgeCheck className="w-3 h-3" />Verified</Badge>
+                        ) : (
+                          <Badge variant="outline">Unverified</Badge>
+                        )}
+                      </td>
+                      <td className="py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button size="sm" variant="ghost" title="Toggle verified" className="h-8 w-8 p-0" onClick={() => toggleVerified(book)}>
+                            <ShieldCheck className="w-4 h-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" title="Download" className="h-8 w-8 p-0" disabled={!book.file_path} onClick={() => handleDownload(book)}>
+                            <Download className="w-4 h-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" title="Delete" className="h-8 w-8 p-0 text-red-500 hover:text-red-600" onClick={() => setDeleteTarget(book)}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </div>
-                      </div>
-                    </td>
-                    <td className="py-3 font-mono text-xs">{book.isbn}</td>
-                    <td className="py-3"><Badge variant="outline">{book.category}</Badge></td>
-                    <td className="py-3">{book.year}</td>
-                    <td className="py-3">{book.available}/{book.quantity}</td>
-                    <td className="py-3">
-                      <div className="flex items-center gap-1">
-                        <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                        <span>{book.rating}</span>
-                      </div>
-                    </td>
-                    <td className="py-3">
-                      <Badge variant={(statusColor[book.status] || 'outline') as any} className="capitalize">
-                        {book.status}
-                      </Badge>
-                    </td>
-                    <td className="py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button size="sm" variant="ghost" onClick={() => openEdit(book)} className="h-8 w-8 p-0">
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                          onClick={() => setDeleteConfirm(book.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-            {filtered.length === 0 && (
-              <div className="py-12 text-center text-muted-foreground">
-                <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p>No books found</p>
-              </div>
-            )}
-          </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {books.length === 0 && (
+                <div className="py-12 text-center text-muted-foreground">
+                  <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>No books yet. Click “Upload Book” to add your first real book.</p>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Add/Edit Modal */}
+      {/* Upload modal */}
       <AnimatePresence>
         {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/50"
-              onClick={() => setShowModal(false)}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="relative bg-background rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
-            >
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold">{editingBook ? 'Edit Book' : 'Add New Book'}</h2>
-                  <Button variant="ghost" size="sm" onClick={() => setShowModal(false)} className="h-8 w-8 p-0">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/50" onClick={() => !saving && setShowModal(false)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-background rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+              <div className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold">Upload New Book</h2>
+                  <Button variant="ghost" size="sm" onClick={() => setShowModal(false)} disabled={saving} className="h-8 w-8 p-0">
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2 space-y-1">
-                      <label className="text-sm font-medium">Title *</label>
-                      <Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Book title" />
-                    </div>
-                    <div className="col-span-2 space-y-1">
-                      <label className="text-sm font-medium">Author *</label>
-                      <Input value={form.author} onChange={e => setForm({ ...form, author: e.target.value })} placeholder="Author name" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium">ISBN</label>
-                      <Input value={form.isbn} onChange={e => setForm({ ...form, isbn: e.target.value })} placeholder="978..." />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium">Published Year</label>
-                      <Input type="number" value={form.year} onChange={e => setForm({ ...form, year: Number(e.target.value) })} />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium">Category</label>
-                      <select className="w-full px-3 py-2 rounded-md border bg-background text-sm" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-                        {categories.map(c => <option key={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium">Status</label>
-                      <select className="w-full px-3 py-2 rounded-md border bg-background text-sm" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
-                        <option value="available">Available</option>
-                        <option value="borrowed">Borrowed</option>
-                        <option value="maintenance">Maintenance</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium">Total Copies</label>
-                      <Input type="number" min="1" value={form.quantity} onChange={e => setForm({ ...form, quantity: Number(e.target.value) })} />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium">Available Copies</label>
-                      <Input type="number" min="0" value={form.available} onChange={e => setForm({ ...form, available: Number(e.target.value) })} />
-                    </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Book file (PDF or EPUB) *</label>
+                  <label className="flex items-center gap-2 border-2 border-dashed rounded-md p-4 cursor-pointer hover:bg-muted/50">
+                    <Upload className="w-5 h-5 text-muted-foreground" />
+                    <span className="text-sm">{file ? `${file.name} · ${formatBytes(file.size)}` : 'Click to choose a file'}</span>
+                    <input type="file" accept=".pdf,.epub,application/pdf,application/epub+zip" className="hidden" onChange={(e) => onPickFile(e.target.files?.[0] ?? null)} />
+                  </label>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Cover image (optional)</label>
+                  <input type="file" accept="image/jpeg,image/png,image/webp" className="text-sm" onChange={(e) => onPickCover(e.target.files?.[0] ?? null)} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2 space-y-1">
+                    <label className="text-sm font-medium">Title *</label>
+                    <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                  </div>
+                  <div className="col-span-2 space-y-1">
+                    <label className="text-sm font-medium">Author *</label>
+                    <Input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">ISBN *</label>
+                    <Input value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} placeholder="978-..." />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Publisher</label>
+                    <Input value={form.publisher} onChange={(e) => setForm({ ...form, publisher: e.target.value })} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Category</label>
+                    <select className="w-full px-3 py-2 rounded-md border bg-background text-sm" value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
+                      <option value="">— None —</option>
+                      {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Published Year</label>
+                    <Input type="number" value={form.published_year} onChange={(e) => setForm({ ...form, published_year: Number(e.target.value) })} />
+                  </div>
+                  <div className="col-span-2 space-y-1">
+                    <label className="text-sm font-medium">Description</label>
+                    <textarea rows={3} className="w-full px-3 py-2 rounded-md border bg-background text-sm" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
                   </div>
                 </div>
-                <div className="flex gap-3 mt-6">
-                  <Button variant="outline" className="flex-1" onClick={() => setShowModal(false)}>Cancel</Button>
-                  <Button className="flex-1 gap-2" onClick={handleSave}>
-                    <Save className="w-4 h-4" />
-                    {editingBook ? 'Save Changes' : 'Add Book'}
+
+                <p className="text-xs text-muted-foreground">
+                  The file is checked, fingerprinted (SHA-256) and stored privately. Only signed-in members can read or download it.
+                </p>
+
+                <div className="flex gap-3">
+                  <Button variant="outline" className="flex-1" onClick={() => setShowModal(false)} disabled={saving}>Cancel</Button>
+                  <Button className="flex-1 gap-2" onClick={handleSave} disabled={saving}>
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    {saving ? 'Uploading…' : 'Upload & Publish'}
                   </Button>
                 </div>
               </div>
@@ -298,17 +403,19 @@ export default function AdminBooks() {
         )}
       </AnimatePresence>
 
-      {/* Delete Confirm */}
+      {/* Delete confirm */}
       <AnimatePresence>
-        {deleteConfirm && (
+        {deleteTarget && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/50" onClick={() => setDeleteConfirm(null)} />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/50" onClick={() => !deleting && setDeleteTarget(null)} />
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-background rounded-lg shadow-xl p-6 max-w-sm w-full">
-              <h3 className="text-lg font-bold mb-2">Delete Book</h3>
-              <p className="text-muted-foreground mb-6">Are you sure you want to delete this book? This action cannot be undone.</p>
+              <h3 className="text-lg font-bold mb-2">Delete “{deleteTarget.title}”?</h3>
+              <p className="text-muted-foreground mb-6">The book record and its uploaded file are permanently removed. This cannot be undone.</p>
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
-                <Button variant="destructive" className="flex-1" onClick={() => handleDelete(deleteConfirm)}>Delete</Button>
+                <Button variant="outline" className="flex-1" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</Button>
+                <Button variant="destructive" className="flex-1" onClick={handleDelete} disabled={deleting}>
+                  {deleting ? 'Deleting…' : 'Delete'}
+                </Button>
               </div>
             </motion.div>
           </div>

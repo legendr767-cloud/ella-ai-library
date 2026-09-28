@@ -1,49 +1,18 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Book, TrendingUp, Sparkles, Search, Users, Award, BookOpen, Star, ArrowRight, Zap, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { bookService } from '@/services/bookService';
+import { categoryService } from '@/services/categoryService';
+import { Book as BookRecord, Category } from '@/types';
 
-const featuredBooks = [
-  {
-    id: 1,
-    title: 'The Great Gatsby',
-    author: 'F. Scott Fitzgerald',
-    cover: 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=400&h=600&fit=crop',
-    rating: 4.5,
-    category: 'Fiction',
-  },
-  {
-    id: 2,
-    title: 'To Kill a Mockingbird',
-    author: 'Harper Lee',
-    cover: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop',
-    rating: 4.8,
-    category: 'Fiction',
-  },
-  {
-    id: 3,
-    title: '1984',
-    author: 'George Orwell',
-    cover: 'https://images.unsplash.com/photo-1495446815901-a7297e633e8d?w=400&h=600&fit=crop',
-    rating: 4.7,
-    category: 'Sci-Fi',
-  },
-  {
-    id: 4,
-    title: 'The Catcher in the Rye',
-    author: 'J.D. Salinger',
-    cover: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=400&h=600&fit=crop',
-    rating: 4.3,
-    category: 'Fiction',
-  },
-];
-
-const categories = [
-  { name: 'Fiction', count: 1250, icon: Book, gradient: 'from-purple-600 to-violet-800' },
-  { name: 'Science', count: 890, icon: Sparkles, gradient: 'from-fuchsia-600 to-purple-800' },
-  { name: 'Technology', count: 654, icon: TrendingUp, gradient: 'from-emerald-600 to-teal-800' },
-  { name: 'History', count: 432, icon: BookOpen, gradient: 'from-amber-600 to-orange-800' },
+const categoryStyles = [
+  { icon: Book, gradient: 'from-purple-600 to-violet-800' },
+  { icon: Sparkles, gradient: 'from-fuchsia-600 to-purple-800' },
+  { icon: TrendingUp, gradient: 'from-emerald-600 to-teal-800' },
+  { icon: BookOpen, gradient: 'from-amber-600 to-orange-800' },
 ];
 
 const features = [
@@ -56,6 +25,24 @@ const features = [
 ];
 
 export default function HomePage() {
+  const [recent, setRecent] = useState<BookRecord[]>([]);
+  const [cats, setCats] = useState<Category[]>([]);
+
+  useEffect(() => {
+    bookService.getRecentBooks(4).then(setRecent).catch(() => setRecent([]));
+    categoryService.getCategories().then((c) => setCats(c.slice(0, 4))).catch(() => setCats([]));
+  }, []);
+
+  const featuredBooks = recent.map((b) => ({
+    id: b.id,
+    title: b.title,
+    author: b.author,
+    cover: b.cover_image_url,
+    rating: Number(b.average_rating) || 0,
+    category: b.category?.name ?? 'Book',
+  }));
+  const categories = cats.map((c, i) => ({ id: c.id, name: c.name, ...categoryStyles[i % categoryStyles.length] }));
+
   return (
     <div className="min-h-screen">
 
@@ -174,14 +161,17 @@ export default function HomePage() {
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-end mb-12">
             <div>
-              <p className="text-primary text-sm font-semibold uppercase tracking-widest mb-2">Handpicked</p>
-              <h2 className="text-4xl font-bold">Featured Books</h2>
+              <p className="text-primary text-sm font-semibold uppercase tracking-widest mb-2">Latest uploads</p>
+              <h2 className="text-4xl font-bold">Recently Added Books</h2>
             </div>
             <Link to="/books">
               <Button variant="outline" className="gap-2">View All <ArrowRight className="w-4 h-4" /></Button>
             </Link>
           </div>
 
+          {featuredBooks.length === 0 && (
+            <p className="text-center text-muted-foreground py-10">No books have been uploaded yet.</p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {featuredBooks.map((book, index) => (
               <motion.div
@@ -193,7 +183,11 @@ export default function HomePage() {
               >
                 <Card className="overflow-hidden border-border/50 hover:border-primary/40 transition-all hover:shadow-xl hover:shadow-primary/10 group">
                   <div className="relative overflow-hidden">
-                    <img src={book.cover} alt={book.title} className="w-full h-72 object-cover group-hover:scale-105 transition-transform duration-500" />
+                    {book.cover ? (
+                      <img src={book.cover} alt={book.title} className="w-full h-72 object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <div className="w-full h-72 bg-muted flex items-center justify-center"><BookOpen className="w-12 h-12 text-muted-foreground/40" /></div>
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                     <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-primary/80 backdrop-blur-sm text-white text-xs font-medium">
                       {book.category}
@@ -206,8 +200,7 @@ export default function HomePage() {
                   <CardContent>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1">
-                        <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                        <span className="font-semibold text-sm">{book.rating}</span>
+                        {book.rating > 0 && (<><Star className="w-4 h-4 fill-yellow-400 text-yellow-400" /><span className="font-semibold text-sm">{book.rating}</span></>)}
                       </div>
                       <Link to={`/books/${book.id}`}>
                         <Button size="sm" variant="outline" className="border-primary/30 hover:bg-primary hover:text-white hover:border-primary">
@@ -234,20 +227,20 @@ export default function HomePage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
             {categories.map((cat, index) => (
               <motion.div
-                key={cat.name}
+                key={cat.id}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
                 viewport={{ once: true }}
               >
-                <Link to={`/books?category=${cat.name}`}>
+                <Link to="/books">
                   <Card className="hover:border-primary/40 transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10 cursor-pointer border-border/50 group">
                     <CardContent className="p-6">
                       <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${cat.gradient} flex items-center justify-center mb-4 shadow-lg`}>
                         <cat.icon className="w-6 h-6 text-white" />
                       </div>
                       <h3 className="text-lg font-semibold mb-1 group-hover:text-primary transition-colors">{cat.name}</h3>
-                      <p className="text-sm text-muted-foreground">{cat.count.toLocaleString()} books</p>
+                      <p className="text-sm text-muted-foreground">Browse books</p>
                     </CardContent>
                   </Card>
                 </Link>

@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { Database } from '@/types/supabase';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -8,7 +7,7 @@ const isDemoMode = !supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('you
 const effectiveUrl = isDemoMode ? 'https://placeholder.supabase.co' : supabaseUrl;
 const effectiveKey = isDemoMode ? 'placeholder-anon-key' : supabaseAnonKey;
 
-export const supabase = createClient<Database>(effectiveUrl, effectiveKey, {
+export const supabase = createClient(effectiveUrl, effectiveKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,

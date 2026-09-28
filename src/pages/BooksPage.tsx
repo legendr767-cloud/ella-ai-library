@@ -1,291 +1,124 @@
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, Star, BookOpen, Heart, CheckCircle, X } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Search, BookOpen, BadgeCheck, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { bookService } from '@/services/bookService';
+import { categoryService } from '@/services/categoryService';
+import { Book, Category } from '@/types';
 
-// Mock book data
-const mockBooks = [
-  {
-    id: 1,
-    title: 'The Great Gatsby',
-    author: 'F. Scott Fitzgerald',
-    cover: 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=400&h=600&fit=crop',
-    rating: 4.5,
-    category: 'Fiction',
-    year: 1925,
-    available: true,
-    description: 'A classic American novel set in the Jazz Age',
-  },
-  {
-    id: 2,
-    title: 'To Kill a Mockingbird',
-    author: 'Harper Lee',
-    cover: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop',
-    rating: 4.8,
-    category: 'Fiction',
-    year: 1960,
-    available: true,
-    description: 'A gripping tale of racial injustice and childhood innocence',
-  },
-  {
-    id: 3,
-    title: '1984',
-    author: 'George Orwell',
-    cover: 'https://images.unsplash.com/photo-1495446815901-a7297e633e8d?w=400&h=600&fit=crop',
-    rating: 4.7,
-    category: 'Science Fiction',
-    year: 1949,
-    available: false,
-    description: 'A dystopian social science fiction novel',
-  },
-  {
-    id: 4,
-    title: 'Pride and Prejudice',
-    author: 'Jane Austen',
-    cover: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=400&h=600&fit=crop',
-    rating: 4.6,
-    category: 'Romance',
-    year: 1813,
-    available: true,
-    description: 'A romantic novel of manners',
-  },
-  {
-    id: 5,
-    title: 'The Hobbit',
-    author: 'J.R.R. Tolkien',
-    cover: 'https://images.unsplash.com/photo-1621351183012-e2f9972dd9bf?w=400&h=600&fit=crop',
-    rating: 4.7,
-    category: 'Fantasy',
-    year: 1937,
-    available: true,
-    description: 'A fantasy adventure novel',
-  },
-  {
-    id: 6,
-    title: 'Harry Potter',
-    author: 'J.K. Rowling',
-    cover: 'https://images.unsplash.com/photo-1551029506-0807df4e2031?w=400&h=600&fit=crop',
-    rating: 4.9,
-    category: 'Fantasy',
-    year: 1997,
-    available: true,
-    description: 'The magical journey of a young wizard',
-  },
-  {
-    id: 7,
-    title: 'The Catcher in the Rye',
-    author: 'J.D. Salinger',
-    cover: 'https://images.unsplash.com/photo-1589998059171-988d887df646?w=400&h=600&fit=crop',
-    rating: 4.3,
-    category: 'Fiction',
-    year: 1951,
-    available: false,
-    description: 'A story about teenage rebellion',
-  },
-  {
-    id: 8,
-    title: 'Brave New World',
-    author: 'Aldous Huxley',
-    cover: 'https://images.unsplash.com/photo-1592496431122-2349e0fbc666?w=400&h=600&fit=crop',
-    rating: 4.4,
-    category: 'Science Fiction',
-    year: 1932,
-    available: true,
-    description: 'A dystopian novel about a futuristic society',
-  },
-];
-
-const categories = ['All', 'Fiction', 'Science Fiction', 'Fantasy', 'Romance', 'Non-Fiction'];
+const PAGE_SIZE = 12;
 
 export default function BooksPage() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [showFilters, setShowFilters] = useState(false);
-  const [favorites, setFavorites] = useState<number[]>([]);
-  const [borrowedIds, setBorrowedIds] = useState<number[]>([]);
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'info' } | null>(null);
+  const [books, setBooks] = useState<Book[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [search, setSearch] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const showToast = (msg: string, type: 'success' | 'info' = 'success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  useEffect(() => {
+    categoryService.getCategories().then(setCategories).catch(() => setCategories([]));
+  }, []);
 
-  const toggleFavorite = (id: number, title: string) => {
-    setFavorites(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
-    showToast(favorites.includes(id) ? `Removed from favourites` : `Added "${title}" to favourites`, 'info');
-  };
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await bookService.getBooks(
+        { search: search || undefined, category_id: categoryId || undefined },
+        page,
+        PAGE_SIZE
+      );
+      setBooks(res.data);
+      setTotalPages(Math.max(res.total_pages, 1));
+      setTotal(res.total);
+    } catch (e: any) {
+      setError(e.message || 'Could not load books');
+    } finally {
+      setLoading(false);
+    }
+  }, [search, categoryId, page]);
 
-  const handleBorrow = (id: number, title: string) => {
-    setBorrowedIds(prev => [...prev, id]);
-    showToast(`"${title}" borrowed! Check My Books for details.`);
-  };
-
-  const filteredBooks = mockBooks.filter((book) => {
-    const matchesSearch = book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         book.author.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'All' || book.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  useEffect(() => {
+    const t = setTimeout(load, 250);
+    return () => clearTimeout(t);
+  }, [load]);
 
   return (
     <div className="min-h-screen py-8">
-      <div className="container mx-auto px-4">
-        {/* Header */}
-        <div className="mb-8">
+      <div className="container mx-auto px-4 space-y-6">
+        <div>
           <h1 className="text-4xl font-bold mb-2">Browse Books</h1>
-          <p className="text-muted-foreground">Discover your next favorite read from our collection</p>
+          <p className="text-muted-foreground">{total} book{total === 1 ? '' : 's'} in the library</p>
         </div>
 
-        {/* Search and Filters */}
-        <div className="mb-8 space-y-4">
-          <div className="flex gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search by title or author..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Button
-              variant="outline"
-              onClick={() => setShowFilters(!showFilters)}
-              className="gap-2"
-            >
-              <Filter className="w-4 h-4" />
-              Filters
-            </Button>
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by title, author or description..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="pl-9"
+            />
           </div>
-
-          {/* Category Filters */}
-          {showFilters && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="flex flex-wrap gap-2"
-            >
-              {categories.map((category) => (
-                <Badge
-                  key={category}
-                  variant={selectedCategory === category ? 'default' : 'outline'}
-                  className="cursor-pointer"
-                  onClick={() => setSelectedCategory(category)}
-                >
-                  {category}
-                </Badge>
-              ))}
-            </motion.div>
-          )}
+          <select
+            className="px-3 py-2 rounded-md border bg-background text-sm md:w-56"
+            value={categoryId}
+            onChange={(e) => { setCategoryId(e.target.value); setPage(1); }}
+          >
+            <option value="">All categories</option>
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
         </div>
 
-        {/* Results Count */}
-        <div className="mb-6">
-          <p className="text-sm text-muted-foreground">
-            Showing {filteredBooks.length} {filteredBooks.length === 1 ? 'book' : 'books'}
-          </p>
-        </div>
-
-        {/* Books Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredBooks.map((book, index) => (
-            <motion.div
-              key={book.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: index * 0.05 }}
-            >
-              <Card className="overflow-hidden hover:shadow-lg transition-all group h-full flex flex-col">
-                <div className="relative overflow-hidden">
-                  <img
-                    src={book.cover}
-                    alt={book.title}
-                    className="w-full h-80 object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute top-3 right-3 flex gap-2">
-                    <Badge variant={book.available ? 'default' : 'secondary'}>
-                      {book.available ? 'Available' : 'Borrowed'}
-                    </Badge>
-                  </div>
-                  <button onClick={() => toggleFavorite(book.id, book.title)} className="absolute top-3 left-3 p-2 rounded-full bg-white/90 hover:bg-white transition-colors">
-                    <Heart className={`w-4 h-4 transition-colors ${favorites.includes(book.id) ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
-                  </button>
+        {loading ? (
+          <div className="py-20 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
+        ) : error ? (
+          <p className="py-20 text-center text-red-500">{error}</p>
+        ) : books.length === 0 ? (
+          <div className="py-20 text-center text-muted-foreground">
+            <BookOpen className="w-14 h-14 mx-auto mb-3 opacity-30" />
+            <p>No books found{search ? ` for “${search}”` : ''}.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {books.map((book) => (
+              <Card key={book.id} className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col">
+                <div className="aspect-[2/3] bg-muted flex items-center justify-center">
+                  {book.cover_image_url ? (
+                    <img src={book.cover_image_url} alt={book.title} className="w-full h-full object-cover" loading="lazy" />
+                  ) : (
+                    <BookOpen className="w-12 h-12 text-muted-foreground/40" />
+                  )}
                 </div>
-                
-                <CardHeader className="flex-1">
-                  <Badge variant="outline" className="w-fit mb-2">{book.category}</Badge>
-                  <CardTitle className="line-clamp-2">{book.title}</CardTitle>
-                  <CardDescription className="line-clamp-1">by {book.author}</CardDescription>
-                  <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                    {book.description}
-                  </p>
-                </CardHeader>
-                
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      <span className="font-semibold">{book.rating}</span>
-                      <span className="text-sm text-muted-foreground">({book.year})</span>
-                    </div>
+                <CardContent className="p-4 flex flex-col gap-2 flex-1">
+                  <div className="flex flex-wrap gap-1">
+                    {book.is_verified && <Badge className="gap-1"><BadgeCheck className="w-3 h-3" />Verified</Badge>}
+                    {book.file_path && <Badge variant="outline">{book.file_type?.toUpperCase()}</Badge>}
                   </div>
-                  
-                  <div className="flex gap-2">
-                    <Link to={`/books/${book.id}`} className="flex-1">
-                      <Button size="sm" variant="outline" className="w-full gap-2">
-                        <BookOpen className="w-4 h-4" />
-                        Details
-                      </Button>
-                    </Link>
-                    {book.available && !borrowedIds.includes(book.id) ? (
-                      <Button size="sm" className="flex-1" onClick={() => handleBorrow(book.id, book.title)}>
-                        Borrow
-                      </Button>
-                    ) : borrowedIds.includes(book.id) ? (
-                      <Button size="sm" variant="secondary" className="flex-1" disabled>
-                        <CheckCircle className="w-3 h-3 mr-1" />Borrowed
-                      </Button>
-                    ) : (
-                      <Button size="sm" variant="secondary" className="flex-1" disabled>
-                        Unavailable
-                      </Button>
-                    )}
-                  </div>
+                  <h3 className="font-semibold line-clamp-2">{book.title}</h3>
+                  <p className="text-sm text-muted-foreground">{book.author}</p>
+                  <Link to={`/books/${book.id}`} className="mt-auto">
+                    <Button className="w-full" size="sm">View & Read</Button>
+                  </Link>
                 </CardContent>
               </Card>
-            </motion.div>
-          ))}
-        </div>
-
-      {/* Toast */}
-      <AnimatePresence>
-        {toast && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
-            className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-xl shadow-xl text-white ${ toast.type === 'success' ? 'bg-green-600' : 'bg-primary' }`}>
-            <CheckCircle className="w-5 h-5" />
-            <span className="text-sm font-medium">{toast.msg}</span>
-            <button onClick={() => setToast(null)}><X className="w-4 h-4 opacity-70 hover:opacity-100" /></button>
-          </motion.div>
+            ))}
+          </div>
         )}
-      </AnimatePresence>
 
-        {/* No Results */}
-        {filteredBooks.length === 0 && (
-          <div className="text-center py-20">
-            <BookOpen className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-            <h3 className="text-xl font-semibold mb-2">No books found</h3>
-            <p className="text-muted-foreground mb-4">
-              Try adjusting your search or filters
-            </p>
-            <Button onClick={() => { setSearchQuery(''); setSelectedCategory('All'); }}>
-              Clear Filters
-            </Button>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-3">
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
+            <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
+            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</Button>
           </div>
         )}
       </div>

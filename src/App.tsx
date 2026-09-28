@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Toaster } from 'react-hot-toast';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { ROUTES } from '@/config/constants';
@@ -52,6 +53,7 @@ function App() {
 
   return (
     <Router>
+      <Toaster position="top-right" />
       <Routes>
         {/* Public Routes */}
         <Route element={<MainLayout />}>
