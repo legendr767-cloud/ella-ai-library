@@ -12,12 +12,11 @@ import {
   Eye,
   CheckCircle,
   X,
+  Filter,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-
-type ListType = 'favorites' | 'wishlist' | 'currently-reading' | 'finished' | 'custom';
 
 const lists = [
   { id: 'favorites', name: 'Favorites', icon: Heart, count: 12, color: 'text-red-500' },

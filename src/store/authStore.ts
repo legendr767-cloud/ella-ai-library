@@ -54,7 +54,7 @@ export const useAuthStore = create<AuthState>()(
               user: {
                 id: data.user.id,
                 email: data.user.email!,
-                role: (data.user.user_metadata?.role || 'student') as any,
+                role: (profile?.role || 'student') as any,
                 created_at: data.user.created_at,
                 updated_at: data.user.updated_at || data.user.created_at,
               },
@@ -79,7 +79,6 @@ export const useAuthStore = create<AuthState>()(
             options: {
               data: {
                 full_name: fullName,
-                role: 'student',
               },
             },
           });
@@ -173,7 +172,13 @@ export const useAuthStore = create<AuthState>()(
               .eq('user_id', session.user.id)
               .single();
             set({
-              user: session.user,
+              user: {
+                id: session.user.id,
+                email: session.user.email!,
+                role: (profile?.role || 'student') as any,
+                created_at: session.user.created_at,
+                updated_at: session.user.updated_at || session.user.created_at,
+              },
               profile: profile || null,
               isAuthenticated: true,
               isInitializing: false,

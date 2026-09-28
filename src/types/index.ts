@@ -64,7 +64,16 @@ export interface Book {
   tags?: Tag[];
   cover_image_url?: string;
   file_url?: string;
+  file_path?: string | null;
+  cover_path?: string | null;
   file_type?: 'pdf' | 'epub';
+  file_size_bytes?: number | null;
+  file_sha256?: string | null;
+  publisher?: string | null;
+  uploaded_by?: string | null;
+  is_verified?: boolean;
+  verified_at?: string | null;
+  download_count?: number;
   published_year: number;
   language: string;
   pages: number;
