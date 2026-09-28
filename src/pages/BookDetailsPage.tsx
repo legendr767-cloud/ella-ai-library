@@ -6,7 +6,6 @@ import {
   Download,
   BadgeCheck,
   ShieldAlert,
-  ExternalLink,
   FileText,
   Loader2,
   ChevronLeft,
@@ -64,14 +63,12 @@ export default function BookDetailsPage() {
 
   const hasFile = !!book.file_path;
   const rows: [string, string | number | null | undefined][] = [
-    ['ISBN', book.isbn],
-    ['Publisher', book.publisher],
-    ['Published', book.published_year],
     ['Language', book.language?.toUpperCase()],
     ['Pages', book.pages],
     ['Category', book.category?.name],
     ['File', hasFile ? `${book.file_type?.toUpperCase()} · ${formatBytes(book.file_size_bytes)}` : 'No digital file'],
     ['Added', new Date(book.created_at).toLocaleDateString()],
+    ['Downloads', book.download_count ?? 0],
   ];
 
   return (
@@ -103,7 +100,7 @@ export default function BookDetailsPage() {
                 )}
               </div>
               <h1 className="text-4xl font-bold mb-1">{book.title}</h1>
-              <p className="text-xl text-muted-foreground">by {book.author}</p>
+              {book.author && <p className="text-xl text-muted-foreground">by {book.author}</p>}
             </div>
 
             {/* Read / Download */}
@@ -161,17 +158,10 @@ export default function BookDetailsPage() {
                     : 'This book has not yet been confirmed by a librarian.'}
                 </p>
                 <ul className="space-y-1 text-muted-foreground">
-                  <li>• Its ISBN passed the international checksum test.</li>
+                  <li>• Uploaded by the library team, not by members.</li>
+                  {hasFile && <li>• File type was checked on upload ({book.file_type?.toUpperCase()}).</li>}
                   {hasFile && <li className="flex items-start gap-1"><FileText className="w-4 h-4 mt-0.5 shrink-0" /><span>File fingerprint (SHA-256): <code className="break-all text-xs">{book.file_sha256}</code></span></li>}
                 </ul>
-                <a
-                  href={`https://openlibrary.org/isbn/${book.isbn}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-primary hover:underline"
-                >
-                  Look up this ISBN on Open Library <ExternalLink className="w-3 h-3" />
-                </a>
               </CardContent>
             </Card>
           </div>

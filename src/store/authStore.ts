@@ -13,7 +13,8 @@ interface AuthState {
   setProfile: (profile: Profile | null) => void;
   setLoading: (loading: boolean) => void;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, fullName: string) => Promise<void>;
+  register: (email: string, password: string, fullName: string) => Promise<{ needsVerification: boolean }>;
+  resendVerification: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (data: Partial<Profile>) => Promise<void>;
   checkAuth: () => Promise<void>;
@@ -80,10 +81,17 @@ export const useAuthStore = create<AuthState>()(
               data: {
                 full_name: fullName,
               },
+              // Where the link in the confirmation email sends the user
+              emailRedirectTo: `${window.location.origin}/email-verified`,
             },
           });
 
           if (error) throw error;
+
+          // Supabase hides duplicate sign-ups by returning a user with no identities
+          if (data.user && data.user.identities && data.user.identities.length === 0) {
+            throw new Error('An account with this email already exists. Please sign in instead.');
+          }
 
           if (data.session && data.user) {
             // Profile is auto-created by DB trigger on_auth_user_created
@@ -107,16 +115,26 @@ export const useAuthStore = create<AuthState>()(
               profile: profile || null,
               isAuthenticated: true,
             });
-          } else if (data.user && !data.session) {
-            // Email confirmation required — account created but not yet active
-            throw new Error('Account created! Please check your email to confirm your account, then sign in.');
+            return { needsVerification: false };
           }
+
+          // No session = email confirmation is required before the account can be used
+          return { needsVerification: true };
         } catch (error) {
           console.error('Registration error:', error);
           throw error;
         } finally {
           set({ isLoading: false });
         }
+      },
+
+      resendVerification: async (email) => {
+        const { error } = await supabase.auth.resend({
+          type: 'signup',
+          email,
+          options: { emailRedirectTo: `${window.location.origin}/email-verified` },
+        });
+        if (error) throw error;
       },
 
       logout: async () => {

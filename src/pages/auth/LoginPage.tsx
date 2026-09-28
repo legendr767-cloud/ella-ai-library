@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Mail, Lock, Eye, EyeOff, LogIn, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -9,7 +9,10 @@ import { useAuthStore } from '@/store/authStore';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login } = useAuthStore();
+  const { login, resendVerification } = useAuthStore();
+  const [searchParams] = useSearchParams();
+  const [needsVerify, setNeedsVerify] = useState(false);
+  const [resendMsg, setResendMsg] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
@@ -23,6 +26,8 @@ export default function LoginPage() {
     e.preventDefault();
     setErrors({});
     setAuthError('');
+    setNeedsVerify(false);
+    setResendMsg('');
     setIsLoading(true);
 
     const newErrors: Record<string, string> = {};
@@ -42,7 +47,8 @@ export default function LoginPage() {
     } catch (error: any) {
       const msg: string = error?.message || '';
       if (msg.toLowerCase().includes('email not confirmed') || msg.toLowerCase().includes('not confirmed')) {
-        setAuthError('Your email is not confirmed yet. Please check your inbox and click the confirmation link first.');
+        setNeedsVerify(true);
+        setAuthError('Your email is not verified yet. Open the verification link we emailed you, then sign in.');
       } else if (msg.toLowerCase().includes('invalid login') || msg.toLowerCase().includes('invalid credentials')) {
         setAuthError('Incorrect email or password. Please try again.');
       } else {
@@ -50,6 +56,15 @@ export default function LoginPage() {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    try {
+      await resendVerification(formData.email);
+      setResendMsg('Verification email sent. Please check your inbox (and spam folder).');
+    } catch (e: any) {
+      setResendMsg(e?.message || 'Could not resend right now. Please try again in a minute.');
     }
   };
 
@@ -75,6 +90,19 @@ export default function LoginPage() {
             {authError && (
               <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-400">
                 {authError}
+              </div>
+            )}
+            {needsVerify && (
+              <div className="space-y-2 text-center">
+                <Button type="button" variant="outline" size="sm" onClick={handleResend} disabled={!formData.email}>
+                  Resend verification email
+                </Button>
+                {resendMsg && <p className="text-xs text-muted-foreground">{resendMsg}</p>}
+              </div>
+            )}
+            {searchParams.get('verified') === '1' && !authError && (
+              <div className="p-3 rounded-md bg-green-500/10 text-green-600 text-sm">
+                Your email is verified. You can sign in now.
               </div>
             )}
             {/* Email Field */}
