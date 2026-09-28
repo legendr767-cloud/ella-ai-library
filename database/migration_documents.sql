@@ -1,6 +1,6 @@
 -- =====================================================================
 -- Ella's Library — Document management migration
--- Run once in Supabase Dashboard > SQL Editor (safe to re-run).
+-- Already applied to the live "ella" Supabase project. Safe to re-run.
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -34,18 +34,18 @@ AS $$
   );
 $$;
 
--- New sign-ups always become 'student', whatever the client sends
-CREATE OR REPLACE FUNCTION public.handle_new_user()
+-- New sign-ups always become 'student', whatever the client sends in metadata
+CREATE OR REPLACE FUNCTION public.create_profile_for_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  INSERT INTO profiles (user_id, full_name, email, role)
+  INSERT INTO public.profiles (user_id, full_name, email, role)
   VALUES (
     NEW.id,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
+    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1), 'User'),
     NEW.email,
     'student'
   )
@@ -54,10 +54,33 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+-- Metadata changes may sync the email, but must NEVER change the role
+CREATE OR REPLACE FUNCTION public.sync_profile_role()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE public.profiles SET email = NEW.email WHERE user_id = NEW.id;
+  RETURN NEW;
+END;
+$$;
+
+-- Role changes are made in profiles.role, and only by an existing admin
+CREATE OR REPLACE FUNCTION public.admin_update_user_role(target_user_id UUID, new_role user_role)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND role = 'admin' AND is_suspended = FALSE) THEN
+    RAISE EXCEPTION 'Only admins can change user roles';
+  END IF;
+  UPDATE profiles SET role = new_role WHERE user_id = target_user_id;
+END;
+$$;
 
 -- Nobody may change their own role / suspension (only an existing admin can)
 CREATE OR REPLACE FUNCTION public.protect_profile_role()
@@ -80,6 +103,14 @@ DROP TRIGGER IF EXISTS protect_profile_role_trigger ON profiles;
 CREATE TRIGGER protect_profile_role_trigger
   BEFORE UPDATE ON profiles
   FOR EACH ROW EXECUTE FUNCTION public.protect_profile_role();
+
+DROP POLICY IF EXISTS "Admins can update any profile" ON profiles;
+CREATE POLICY "Staff can update any profile" ON profiles FOR UPDATE USING (public.is_staff());
+
+-- Reader needs bookmarks to be readable/writable by their owner
+DROP POLICY IF EXISTS "Users can manage own bookmarks" ON bookmarks;
+CREATE POLICY "Users can manage own bookmarks" ON bookmarks FOR ALL
+  USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
 -- ---------------------------------------------------------------------
 -- 2. Book file + authenticity metadata
@@ -177,3 +208,15 @@ CREATE POLICY "Staff can delete covers" ON storage.objects
 -- ---------------------------------------------------------------------
 -- UPDATE profiles SET role = 'admin'
 -- WHERE user_id = (SELECT id FROM auth.users WHERE email = 'you@example.com');
+
+-- ---------------------------------------------------------------------
+-- 5. Lock down function privileges (applied after section 1-4)
+-- ---------------------------------------------------------------------
+REVOKE EXECUTE ON FUNCTION public.create_profile_for_user() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.sync_profile_role() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.protect_profile_role() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.admin_update_user_role(uuid, user_role) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.admin_update_user_role(uuid, user_role) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.record_book_download(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.record_book_download(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_staff() TO anon, authenticated;
