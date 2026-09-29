@@ -68,7 +68,7 @@ function App() {
           <Route path={ROUTES.LOGIN} element={<LoginPage />} />
           <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
           <Route path={ROUTES.FORGOT_PASSWORD} element={<ForgotPasswordPage />} />
-          <Route path="/email-verified" element={<EmailVerifiedPage />} />
+          <Route path="/verified" element={<EmailVerifiedPage />} />
         </Route>
 
         {/* Protected User Routes */}

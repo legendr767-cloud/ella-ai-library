@@ -82,7 +82,7 @@ export const useAuthStore = create<AuthState>()(
                 full_name: fullName,
               },
               // Where the link in the confirmation email sends the user
-              emailRedirectTo: `${window.location.origin}/email-verified`,
+              emailRedirectTo: `${window.location.origin}/verified`,
             },
           });
 
@@ -132,7 +132,7 @@ export const useAuthStore = create<AuthState>()(
         const { error } = await supabase.auth.resend({
           type: 'signup',
           email,
-          options: { emailRedirectTo: `${window.location.origin}/email-verified` },
+          options: { emailRedirectTo: `${window.location.origin}/verified` },
         });
         if (error) throw error;
       },
